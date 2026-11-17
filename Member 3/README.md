@@ -2,15 +2,16 @@
 
 This directory contains the Member 3 contribution to CARELOOP — Closing the Screening-to-Care Loop.
 
-## Modules
+## Delivered modules
 
-1. **Admin Dashboard** — overview KPIs and recent escalations.
-2. **Case Monitoring** — searchable case list with status and priority filters.
-3. **Escalation Monitoring** — overdue referrals, missed appointments, unacknowledged notifications, and unresolved cases.
-4. **Lost-to-Follow-Up Monitoring** — rule-based risk flags and suggested next actions supplied by the API.
-5. **Analytics & Reports** — referral, attendance, notification, consultation-time, and closure metrics.
+1. **Admin workspace shell** — responsive sidebar navigation and section switching.
+2. **Admin Dashboard** — six KPI cards and recent escalations.
+3. **Case Monitoring** — searchable case list with status and priority filters.
+4. **Escalation Monitoring** — overdue referrals, missed appointments, unacknowledged notifications, unresolved cases, and unassigned cases.
+5. **Lost-to-Follow-Up Monitoring** — rule-based risk reasons, overdue days, ownership, and suggested next action.
+6. **Analytics & Reports** — referral completion, appointment attendance, notification acknowledgement, average time to consultation, verified closure, unresolved cases, and trend charts.
 
-## Current source layout
+## Source layout
 
 ```text
 Member 3/
@@ -18,6 +19,7 @@ Member 3/
 └── src/
     ├── features/
     │   └── admin/
+    │       ├── AdminApp.tsx
     │       ├── AdminDashboard.tsx
     │       ├── CaseMonitoring.tsx
     │       ├── EscalationMonitoring.tsx
@@ -30,14 +32,28 @@ Member 3/
     │       │   ├── AlertList.tsx
     │       │   └── AnalyticsCharts.tsx
     │       └── services/
-    │           └── adminService.ts
+    │           ├── adminService.ts
+    │           └── demoData.ts
     ├── services/
     │   └── api.ts
     └── types/
         └── admin.ts
 ```
 
-## API contract expected by this module
+## Demo mode
+
+The admin modules use fictional, synthetic demonstration records by default. This allows the interface to be demonstrated before the backend API is available. The UI labels this mode as **DEMO DATA**.
+
+To use the backend instead, set this environment variable in the host Vite application:
+
+```env
+VITE_CARELOOP_USE_DEMO_DATA=false
+VITE_CARELOOP_API_URL=https://your-api-base-url
+```
+
+Do not put secrets in Vite environment variables; values prefixed with `VITE_` are exposed to the browser.
+
+## API contracts expected from the backend team
 
 - `GET /api/admin/overview`
 - `GET /api/admin/cases`
@@ -45,14 +61,32 @@ Member 3/
 - `GET /api/admin/at-risk`
 - `GET /api/admin/analytics`
 
-These endpoints are expected contracts only; they have not been confirmed as implemented by the backend team. Configure `VITE_CARELOOP_API_URL` in the host Vite application when the API base URL is known.
+These are expected contracts, not confirmed deployed endpoints. Confirm response shapes and field names with Member 2 before switching off demo mode.
 
-## Integration notes
+## Host application requirements
 
-- The source is written for a React + TypeScript host application.
-- The charts component uses Recharts.
-- UI classes use Tailwind CSS utility classes.
-- These files are a feature module; the host application must provide React, Tailwind CSS, and Recharts.
-- Coordinate response shapes and field names with the backend team before integration.
-- Use synthetic demonstration data only. Never commit real patient or medical information.
-- All work in this contribution must remain inside `Member 3/`.
+This is a feature module intended to be imported into the team's host React application. The host app must provide:
+
+- React
+- TypeScript
+- Tailwind CSS
+- Recharts
+
+Import the standalone workspace with:
+
+```tsx
+import { AdminApp } from "./features/admin";
+
+export default function App() {
+  return <AdminApp />;
+}
+```
+
+The repository's root configuration and other members' folders are intentionally untouched. No root package, router, build configuration, or dependency files have been created or modified by this contribution.
+
+## Safety and integration notes
+
+- Use synthetic demonstration data only; never commit real patient or medical information.
+- Coordinate API response contracts and shared status definitions with the backend team.
+- Due-date and risk calculations should be confirmed against the team's agreed business rules.
+- All Member 3 work must remain inside `Member 3/`.
