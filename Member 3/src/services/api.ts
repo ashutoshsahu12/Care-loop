@@ -1,3 +1,4 @@
+/// <reference path="../types/env.d.ts" />
 import type { ApiError } from "../types/admin";
 
 /**
