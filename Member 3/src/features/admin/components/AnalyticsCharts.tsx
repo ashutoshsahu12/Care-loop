@@ -35,10 +35,7 @@ function TrendChart({ title, data, valueLabel }: TrendChartProps) {
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="date" tick={{ fontSize: 11 }} />
               <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-              <Tooltip
-                formatter={(value) => [value, valueLabel]}
-                labelFormatter={(label) => `Date: ${label}`}
-              />
+              <Tooltip />
               <Line
                 type="monotone"
                 dataKey="value"
