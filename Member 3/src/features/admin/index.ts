@@ -1,3 +1,4 @@
+export { default as AdminApp } from "./AdminApp";
 export { AdminDashboard } from "./AdminDashboard";
 export { CaseMonitoring } from "./CaseMonitoring";
 export { EscalationMonitoring } from "./EscalationMonitoring";
@@ -10,3 +11,10 @@ export { AlertList } from "./components/AlertList";
 export { AnalyticsCharts } from "./components/AnalyticsCharts";
 
 export { adminService } from "./services/adminService";
+export {
+  demoOverview,
+  demoCases,
+  demoEscalations,
+  demoAtRiskCases,
+  demoAnalytics,
+} from "./services/demoData";
