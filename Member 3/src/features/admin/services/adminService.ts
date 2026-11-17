@@ -1,3 +1,4 @@
+/// <reference path="../../../types/env.d.ts" />
 import { apiRequest } from "../../../services/api";
 import type {
   AdminAnalytics,
