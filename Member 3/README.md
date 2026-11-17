@@ -90,3 +90,12 @@ The repository's root configuration and other members' folders are intentionally
 - Coordinate API response contracts and shared status definitions with the backend team.
 - Due-date and risk calculations should be confirmed against the team's agreed business rules.
 - All Member 3 work must remain inside `Member 3/`.
+
+## Code review and build readiness
+
+- Local relative imports were checked against the files in this directory; all 42 checked import references resolve.
+- Vite environment variables used by the API service have local TypeScript declarations in `src/types/env.d.ts`.
+- Recharts tooltip configuration uses the library's default formatter to reduce version-specific TypeScript incompatibilities.
+- The case table and escalation list use compatibility-safe string formatting.
+
+**Build status:** A full production build has not yet been run. This folder is a feature module, not a standalone app: the repository root currently does not provide a package manifest, TypeScript/Vite configuration, or installed React/Recharts dependencies. The host application must provide React, React DOM, Vite, TypeScript, Tailwind CSS and Recharts and include this folder in its TypeScript build. Do not mark the module as build-tested until the host app's actual build succeeds.
