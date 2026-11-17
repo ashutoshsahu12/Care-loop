@@ -35,18 +35,15 @@ export function AlertList({
               <p className="font-medium text-slate-900">
                 {alert.patientReference}
                 <span className="ml-2 font-normal text-slate-500">
-                  {alert.type.replaceAll("_", " ")}
+                  {alert.type.replace(/_/g, " ")}
                 </span>
               </p>
               <p className="mt-1 text-sm text-slate-600">{alert.reason}</p>
               <p className="mt-1 text-xs text-slate-500">
-                Responsible: {alert.responsiblePerson ?? "Not assigned"} ·
-                {" "}{alert.overdueDays} overdue day(s)
+                Responsible: {alert.responsiblePerson ?? "Not assigned"} · {alert.overdueDays} overdue day(s)
               </p>
             </div>
-            <span
-              className={`rounded-full px-2.5 py-1 text-xs font-medium ${priorityStyles[alert.priority]}`}
-            >
+            <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${priorityStyles[alert.priority]}`}>
               {alert.priority}
             </span>
           </div>
