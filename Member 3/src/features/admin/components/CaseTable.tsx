@@ -32,27 +32,23 @@ export function CaseTable({
       <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
         <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
           <tr>
-            <th className="px-4 py-3 font-semibold">Patient reference</th>
-            <th className="px-4 py-3 font-semibold">Status</th>
-            <th className="px-4 py-3 font-semibold">Care worker</th>
-            <th className="px-4 py-3 font-semibold">Next action</th>
-            <th className="px-4 py-3 font-semibold">Due date</th>
-            <th className="px-4 py-3 font-semibold">Last activity</th>
+            <th scope="col" className="px-4 py-3 font-semibold">Patient reference</th>
+            <th scope="col" className="px-4 py-3 font-semibold">Status</th>
+            <th scope="col" className="px-4 py-3 font-semibold">Care worker</th>
+            <th scope="col" className="px-4 py-3 font-semibold">Next action</th>
+            <th scope="col" className="px-4 py-3 font-semibold">Due date</th>
+            <th scope="col" className="px-4 py-3 font-semibold">Last activity</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {cases.map((record) => (
-            <tr
-              key={record.id}
-              className={onSelectCase ? "cursor-pointer hover:bg-slate-50" : ""}
-              onClick={() => onSelectCase?.(record.id)}
-            >
+            <tr key={record.id}>
               <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-900">
                 {record.patientReference}
               </td>
               <td className="whitespace-nowrap px-4 py-3">
                 <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700">
-                  {record.status.replaceAll("_", " ")}
+                  {record.status.replace(/_/g, " ")}
                 </span>
               </td>
               <td className="whitespace-nowrap px-4 py-3 text-slate-600">
