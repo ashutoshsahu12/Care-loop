@@ -1,0 +1,21 @@
+{
+  "name": "careloop-backend",
+  "version": "1.0.0",
+  "description": "CARELOOP Member 2 - Backend & Care Coordination Workflows",
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "start": "node dist/worker.js"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240512.0",
+    "@types/node": "^20.12.7",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
+  }
+}
