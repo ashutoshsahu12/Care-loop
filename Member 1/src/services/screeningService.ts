@@ -3,6 +3,17 @@ import { DEMO_PATIENT_ID, patients, screenings } from "../mocks/data";
 import { recordDemoCaseEvent } from "../mocks/caseEvents";
 import type { Role, Screening } from "../types";
 import { findDetailByPatientRef, getAllBackendPatients, getAllCaseDetails, getCaseDetails, toScreening, visibleCaseDetails } from "./backendBridge";
+/** Extract systolic pressure only from explicitly cardiovascular/BP demonstration results.
+ * This feeds the backend's deterministic triage rules; it is not a diagnosis.
+ */
+export function extractDemoScreeningScore(type: string, result: string): number | undefined {
+  if (!/cardio|blood pressure|hypertension/i.test(type)) return undefined;
+  const match = result.match(/\b(?:BP\s*[:=]?\s*|systolic\s*[:=]?\s*)(\d{2,3})(?:\s*\/\s*\d{2,3})?/i)
+    ?? result.match(/\b(\d{2,3})\s*\/\s*\d{2,3}\b/);
+  const score = match ? Number(match[1]) : NaN;
+  return Number.isInteger(score) && score >= 60 && score <= 300 ? score : undefined;
+}
+
 export const screeningService = {
   async list(role?: Role, patientId?: string): Promise<Screening[]> {
     if (!isDemoMode) {
@@ -29,6 +40,8 @@ export const screeningService = {
       if (!targetPatient) throw new Error("Register or select an existing demo patient before screening.");
       const result = (await api.post<{ careCase: { id: string } }>("/screenings", {
         patientId: targetPatient.id, screeningType: payload.type, resultValue: payload.result,
+        ...(extractDemoScreeningScore(payload.type, payload.result) !== undefined
+          ? { score: extractDemoScreeningScore(payload.type, payload.result) } : {}),
       })).data;
       const latest = await getCaseDetails(result.careCase.id);
       const screening = toScreening(latest);
