@@ -83,6 +83,11 @@ export const AppointmentCreateSchema = z.object({
 
 export type AppointmentCreateInput = z.infer<typeof AppointmentCreateSchema>;
 
+export const AppointmentRescheduleSchema = z.object({
+  scheduledTime: z.string().refine(value => !Number.isNaN(Date.parse(value)), "A valid date/time is required"),
+});
+export type AppointmentRescheduleInput = z.infer<typeof AppointmentRescheduleSchema>;
+
 export const AppointmentAttendanceSchema = z.object({
   status: z.enum(["attended", "no_show", "cancelled", "rescheduled"]),
   attendanceNotes: z.string().optional(),
