@@ -1,5 +1,5 @@
 import { cloneElement, useEffect, useId, useState, type ReactElement } from "react";
-import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -16,7 +16,9 @@ import {
 import { appointments as demoAppointments, chartData, distributionData } from "./mocks/data";
 import { appointmentService } from "./services/appointmentService";
 import { api } from "./services/api";
-import { isDemoMode } from "./services/api";
+import { demoIdentityStorage, isDemoMode } from "./services/api";
+import { browserDemo } from "./services/demoTransport";
+import { JudgeDemo } from "./judge/JudgeDemo";
 import { DEMO_CLINICIAN_NAMES, DEMO_WORKER_NAMES } from "./services/backendBridge";
 import { authService, demoUsers } from "./services/authService";
 import { caseService } from "./services/caseService";
@@ -101,6 +103,7 @@ function AppLayout() {
       <div className="brand-row"><Link className="brand" to={roleHome(user.role)}><span className="brand-mark"><HeartPulse size={19} /></span>{!collapsed && <span>careloop<span className="brand-dot">.</span></span>}</Link><button className="collapse-btn" aria-label="Collapse sidebar" onClick={() => setCollapsed(!collapsed)}><ChevronLeft size={17} /></button></div>
       {!collapsed && <div className="workspace-switch"><span className="workspace-icon"><ShieldCheck size={17} /></span><span className="workspace-copy"><strong>{isDemoMode ? "Bayview Health" : "CARELOOP Demo Network"}</strong><small>Care network</small></span><ChevronDown size={14} /></div>}
       <nav className="side-nav">
+        <Link className="nav-link" to="/judge-demo" onClick={() => setMobileOpen(false)} title={collapsed ? "Judge walkthrough" : undefined}><ClipboardCheck size={18} /><span>Judge walkthrough</span></Link>
         {sections.map((section) => <div className="nav-section" key={section.label}>
           {!collapsed && <div className="nav-section-label">{section.label}</div>}
           {section.items.map(({ label, path, icon: Icon }) => {
@@ -148,15 +151,17 @@ function GlobalSearch({ onClose }: { onClose: () => void }) {
 }
 
 export default function App() {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<User | null>(() => {
-    try { const saved = localStorage.getItem("careloop.demoUser"); return saved ? JSON.parse(saved) as User : null; } catch { return null; }
+    try { const saved = demoIdentityStorage().getItem("careloop.demoUser"); return saved ? JSON.parse(saved) as User : null; } catch { return null; }
   });
-  const signIn = (next: User) => { setUser(next); localStorage.setItem("careloop.demoUser", JSON.stringify(next)); };
-  const signOut = async () => { await authService.logout(); setUser(null); localStorage.removeItem("careloop.demoUser"); };
+  const signIn = (next: User) => { queryClient.clear(); setUser(next); demoIdentityStorage().setItem("careloop.demoUser", JSON.stringify(next)); };
+  const signOut = async () => { await authService.logout(); queryClient.clear(); setUser(null); demoIdentityStorage().removeItem("careloop.demoUser"); };
   return <AuthContext.Provider value={{ user, signIn, signOut }}>
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<AuthPage />} />
+      <Route path="/judge-demo" element={<JudgeDemo />} />
       <Route element={<ProtectedRoute />}><Route element={<AppLayout />}>
           <Route element={<ProtectedRoute allowed={["doctor"]} />}><Route path="/dashboard/doctor" element={<DashboardPage />} /></Route>
           <Route element={<ProtectedRoute allowed={["worker"]} />}><Route path="/dashboard/worker" element={<DashboardPage />} /></Route>
@@ -183,7 +188,7 @@ export default function App() {
 function LandingPage() {
   const { user } = useAuth();
   return <div className="landing-page"><nav className="landing-nav"><Link className="brand" to="/"><span className="brand-mark"><HeartPulse size={19} /></span><span>careloop<span className="brand-dot">.</span></span></Link><div><a href="#how-it-works">How it works</a><a href="#care-teams">For care teams</a><Link to="/login" className="landing-login">Sign in</Link><Button asChild className="btn btn-primary btn-sm"><Link to="/login">Try the demo <ArrowRight size={15} /></Link></Button></div></nav>
-    <section className="hero"><div className="hero-copy"><div className="hero-pill"><span /> BUILT FOR CONTINUITY OF CARE</div><h1>From screening<br />to care, <em>together.</em></h1><p>Every abnormal result deserves a next step. CARELOOP connects care teams and patients to make sure no one falls through the cracks.</p><div className="hero-buttons"><Link to={user ? roleHome(user.role) : "/login"} className="btn btn-primary">Explore the platform <ArrowRight size={17} /></Link><a href="#how-it-works" className="text-link">See how it works <ChevronRight size={16} /></a></div><div className="hero-proof"><div className="proof-avatars"><Avatar initials="P" size="sm" /><Avatar initials="CW" size="sm" /><Avatar initials="D" size="sm" /></div><span>One connected case history for <b>patients and care teams</b></span></div></div>
+    <section className="hero"><div className="hero-copy"><div className="hero-pill"><span /> BUILT FOR CONTINUITY OF CARE</div><h1>From screening<br />to care, <em>together.</em></h1><p>Every abnormal result deserves a next step. CARELOOP connects care teams and patients to make sure no one falls through the cracks.</p><div className="hero-buttons"><Link to={user ? roleHome(user.role) : "/login"} className="btn btn-primary">Explore the platform <ArrowRight size={17} /></Link><Link to="/judge-demo" className="text-link">Judge walkthrough <ChevronRight size={16} /></Link></div><div className="hero-proof"><div className="proof-avatars"><Avatar initials="P" size="sm" /><Avatar initials="CW" size="sm" /><Avatar initials="D" size="sm" /></div><span>One connected case history for <b>patients and care teams</b></span></div></div>
       <div className="hero-art"><div className="hero-grid" /><div className="hero-orbit orbit-one" /><div className="hero-orbit orbit-two" /><div className="hero-center"><span className="brand-mark"><HeartPulse size={27} /></span></div>
         <div className="floating-card journey-float"><div className="float-head"><span className="float-icon"><Activity size={16} /></span><span><b>Care journey</b><small>Olivia Rhye · CASE-2048</small></span><Badge tone="blue">Appointment scheduled</Badge></div><div className="mini-steps"><span className="done"><Check size={12} /></span><i /><span className="done"><Check size={12} /></span><i /><span className="current"><span /></span><i /><span /></div><div className="float-progress"><span>Recorded case events</span><b>8</b></div><div className="float-next"><Clock3 size={14} /><span>Next up: <b>Diagnostic ultrasound</b></span><strong>2:30 PM</strong></div></div>
         <div className="floating-card alert-float"><span className="alert-icon"><Bell size={16} /></span><span><b>Follow-up due</b><small>Ethan Brooks · 2 days overdue</small></span><ArrowRight size={15} /></div>
@@ -201,28 +206,31 @@ type LoginValues = z.infer<typeof loginSchema>;
 function AuthPage() {
   const { signIn } = useAuth();
   const navigate = useNavigate();
-  const [selectedDemo, setSelectedDemo] = useState(demoUsers[0]);
+  const [params] = useSearchParams();
+  const [selectedDemo, setSelectedDemo] = useState(() => demoUsers.find(account => account.role === params.get("role")) ?? demoUsers[0]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const loginForm = useForm<LoginValues>({ resolver: zodResolver(loginSchema), defaultValues: { email: demoUsers[0].email, password: "" } });
+  const loginForm = useForm<LoginValues>({ resolver: zodResolver(loginSchema), defaultValues: { email: selectedDemo.email, password: "" } });
   const chooseDemo = (account: User) => { setSelectedDemo(account); loginForm.setValue("email", account.email); setError(""); };
-  const submitLogin = loginForm.handleSubmit(async (values) => {
+  const openDemo = async (values: LoginValues) => {
     setBusy(true); setError("");
     try { const account = await authService.login(values.email, values.password); signIn(account); navigate(roleHome(account.role)); }
     catch (issue) { setError(issue instanceof Error ? issue.message : "Sign-in failed. Please try again."); }
     finally { setBusy(false); }
-  });
-  return <div className="auth-page"><div className="auth-left"><Link className="brand" to="/"><span className="brand-mark"><HeartPulse size={19} /></span><span>careloop<span className="brand-dot">.</span></span></Link><div className="auth-message"><div className="eyebrow">CARE, CONNECTED</div><h1>Keep every<br />care journey<br /><em>moving forward.</em></h1><p>One place for your team to turn screening results into the care patients need.</p><div className="auth-mini-card"><div className="auth-mini-top"><span><Activity size={16} /> Care journey</span><Badge tone="teal">On track</Badge></div><div className="auth-mini-bar"><span /><span /><span /><span /><i /></div><small>Follow-up is coordinated every step of the way.</small></div></div><div className="auth-left-bottom"><ShieldCheck size={15} /> Your care information is protected</div></div>
-    <div className="auth-right"><div className="auth-form-wrap"><Link to="/" className="back-home"><ChevronLeft size={15} /> Back to CARELOOP</Link><div className="auth-heading"><div className="eyebrow">DEMO ACCESS</div><h2>Sign in to CARELOOP</h2><p>Choose a demo role or sign in with your account.</p></div>
+  };
+  const submitLogin = loginForm.handleSubmit(openDemo);
+  return <div className="auth-page"><div className="auth-left"><Link className="brand" to="/"><span className="brand-mark"><HeartPulse size={19} /></span><span>careloop<span className="brand-dot">.</span></span></Link><div className="auth-message"><div className="eyebrow">CARE, CONNECTED</div><h1>Keep every<br />care journey<br /><em>moving forward.</em></h1><p>One place for your team to turn screening results into the care patients need.</p><div className="auth-mini-card"><div className="auth-mini-top"><span><Activity size={16} /> Care journey</span><Badge tone="teal">On track</Badge></div><div className="auth-mini-bar"><span /><span /><span /><span /><i /></div><small>Follow-up is coordinated every step of the way.</small></div></div><div className="auth-left-bottom"><ShieldCheck size={15} /> Fictional demo records only</div></div>
+    <div className="auth-right"><div className="auth-form-wrap"><Link to="/" className="back-home"><ChevronLeft size={15} /> Back to CARELOOP</Link><div className="auth-heading"><div className="eyebrow">DEMO ACCESS</div><h2>Sign in to CARELOOP</h2><p>Choose a role to explore the synthetic care records.</p></div>
       <div className="demo-label"><span>DEMO ACCOUNTS</span><i /> <small>Choose a role to preview</small></div>
       <div className="demo-role-grid">{demoUsers.map((account) => <button key={account.role} className={`demo-role ${selectedDemo.role === account.role ? "selected" : ""}`} onClick={() => chooseDemo(account)}><Avatar initials={account.initials} size="sm" tone={account.role === "patient" ? "avatar-patient" : ""} /><span><b>{roleLabels[account.role]}</b><small>{account.email}</small></span>{selectedDemo.role === account.role && <Check size={15} />}</button>)}</div>
-      <form onSubmit={submitLogin} className="form-stack login-form">
+      {browserDemo ? <button className="btn btn-primary btn-full" disabled={busy} onClick={() => void openDemo({ email: selectedDemo.email, password: "synthetic-demo" })}>Open as {roleLabels[selectedDemo.role]} <ArrowRight size={16} /></button> : <form onSubmit={submitLogin} className="form-stack login-form">
         <Field label="Email address" error={loginForm.formState.errors.email?.message}><input {...loginForm.register("email")} type="email" autoComplete="username" /></Field>
         <Field label="Password" error={loginForm.formState.errors.password?.message}><input {...loginForm.register("password")} type="password" placeholder="Enter any password for demo access" autoComplete="current-password" /></Field>
         <div className="demo-note"><Sparkles size={14} /> Demo mode: any password works. No password is stored.</div>
         {error && <div className="form-error">{error}</div>}<button className="btn btn-primary btn-full" disabled={busy}>{busy ? "Signing in…" : "Sign in to CARELOOP"} <ArrowRight size={16} /></button>
-      </form>
-      <div className="auth-switch">Demo identities use synthetic case data and do not create real accounts.</div><div className="auth-security"><ShieldCheck size={14} /> Secure access · Demo environment</div></div></div></div>;
+      </form>}
+      {browserDemo && error && <div role="alert" className="form-error">{error}</div>}
+      <div className="auth-switch">Demo identities use synthetic case data and do not create real accounts.</div><div className="auth-security"><ShieldCheck size={14} /> Synthetic demo environment</div></div></div></div>;
 }
 
 function Field({ label, children, error }: { label: string; children: ReactElement<{ id?: string; "aria-describedby"?: string; "aria-invalid"?: boolean }>; error?: string }) {

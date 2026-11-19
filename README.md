@@ -4,6 +4,20 @@ A comprehensive healthcare coordination platform designed to ensure that no pati
 
 ---
 
+## Judge demo and Vercel
+
+Start at `/judge-demo` for the four-role walkthrough, synthetic cohort metrics, and a [verification and pilot guide](docs/judge-demo.md). The Vercel build runs the existing CARELOOP workflow in the browser. Use the role links in one tab to work on the same cases, and use the reset control to restore the fixture.
+
+Import this repository into Vercel with the **repository root** as the Root Directory. The root `vercel.json` specifies installation, the build, output, and deep-link handling. The browser demo uses Node.js 22 at build time and requires no environment variables or hosted database.
+
+To reproduce the deployment build locally from the repository root:
+
+```bash
+npm ci --prefix 'Member 1'
+VITE_CARELOOP_BROWSER_DEMO=true npm run build --prefix 'Member 1'
+npm run preview --prefix 'Member 1'
+```
+
 ## Architecture & Technology Stack
 
 The project operates on a unified, high-performance TypeScript stack:
@@ -11,11 +25,6 @@ The project operates on a unified, high-performance TypeScript stack:
 - **Backend & Care Coordination Engine (Member 2):** Cloudflare Workers (TypeScript), Cloudflare D1 (SQLite), Zod validation, and Vitest.
 - **Admin, Monitoring & Analytics Dashboard (Member 3):** React, Vite, TypeScript, Tailwind CSS, and Recharts.
 - **Patient Experience & Web Application (Member 1):** Mobile-first React + Vite TypeScript webapp.
-
-### Stack Discrepancy Note & Resolution
-While early project notes mentioned self-hosted n8n and Supabase/Postgres, the codebase establishes **Cloudflare Workers + Cloudflare D1 (SQLite) + React/Vite/TypeScript** as authoritative. This edge-native architecture ensures deterministic sub-millisecond response times, zero external database hosting friction, parameterized SQL safety, and full local testability without requiring external containers or SaaS services.
-
----
 
 ## Repository Structure
 
@@ -33,7 +42,7 @@ Care-loop/
 │   ├── package.json           # Backend dependencies and test scripts
 │   ├── wrangler.toml          # Cloudflare Workers configuration
 │   ├── src/                   # Database, services, rules, and API router
-│   └── tests/                 # 12 Vitest test suites (47 tests)
+│   └── tests/                 # Vitest suites
 └── Member 3/                  # Admin, Monitoring & Analytics Workspace (React + Vite)
     ├── README.md              # Frontend module documentation
     └── src/                   # Admin UI components, dashboards, and demo data
@@ -56,7 +65,7 @@ npm run dev
 ```bash
 cd "Member 2"
 npm install
-npm test            # Run all 12 test suites (47 tests)
+npm test            # Run backend tests
 npm run build       # Verify TypeScript compilation and bundle
 npm run dev         # Or 'npx wrangler dev' to run locally on http://localhost:8787
 ```

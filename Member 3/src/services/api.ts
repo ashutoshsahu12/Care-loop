@@ -1,4 +1,5 @@
 /// <reference path="../types/env.d.ts" />
+import { browserDemo, demoFetch, demoIdentityStorage, tokenKey } from "../../../Member 1/src/services/demoTransport";
 import type { ApiError } from "../types/admin";
 import { resolveAdminApiBaseUrl } from "./config";
 
@@ -6,7 +7,7 @@ import { resolveAdminApiBaseUrl } from "./config";
  * Small fetch wrapper scoped to Member 3.
  * Set VITE_CARELOOP_API_URL in the host app when the team API is available.
  */
-const API_BASE_URL = resolveAdminApiBaseUrl(
+const API_BASE_URL = browserDemo ? "" : resolveAdminApiBaseUrl(
   import.meta.env.VITE_CARELOOP_API_URL,
   import.meta.env.VITE_API_BASE_URL,
 );
@@ -15,13 +16,13 @@ export async function apiRequest<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await demoFetch(new URL(`${API_BASE_URL}${path}`, window.location.origin), {
     ...init,
     headers: {
       Accept: "application/json",
       // Same synthetic demo identity as Member 1; never rely on backend admin fallback.
-      ...(typeof localStorage !== "undefined" && localStorage.getItem("careloop.accessToken")
-        ? { Authorization: `Bearer ${localStorage.getItem("careloop.accessToken")}` }
+      ...(typeof localStorage !== "undefined" && demoIdentityStorage().getItem(tokenKey)
+        ? { Authorization: `Bearer ${demoIdentityStorage().getItem(tokenKey)}` }
         : {}),
       ...(init.body ? { "Content-Type": "application/json" } : {}),
       ...init.headers,

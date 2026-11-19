@@ -15,7 +15,8 @@
       "@/*": ["./src/*"],
       "react": ["./node_modules/@types/react"],
       "react/jsx-runtime": ["./node_modules/@types/react/jsx-runtime.d.ts"],
-      "recharts": ["./node_modules/recharts"]
+      "recharts": ["./node_modules/recharts"],
+      "zod": ["./node_modules/zod"]
     },
     "jsx": "react-jsx",
     "strict": true,

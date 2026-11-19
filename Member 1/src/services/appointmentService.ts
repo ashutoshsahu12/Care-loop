@@ -1,4 +1,4 @@
-import { api, isDemoMode, tokenKey } from "./api";
+import { api, demoIdentityStorage, isDemoMode, tokenKey } from "./api";
 import { DEMO_PATIENT_ID, appointments, patients } from "../mocks/data";
 import { recordDemoCaseEvent } from "../mocks/caseEvents";
 import type { Appointment, Role } from "../types";
@@ -33,7 +33,7 @@ export const appointmentService = {
       const targetCase = caseId || detail?.caseRecord.id;
       if (!targetCase) throw new Error("Select a patient with an active case.");
       const selectedDate = date.length === 10 ? `${date}T12:00:00.000Z` : new Date(date).toISOString();
-      const demoRole = localStorage.getItem(tokenKey);
+      const demoRole = demoIdentityStorage().getItem(tokenKey);
       if (isConnectedPatientToken(demoRole)) {
         await api.post(`/cases/${encodeURIComponent(targetCase)}/help-requests`, {
           message: `Please help schedule ${type} on ${date}.`,

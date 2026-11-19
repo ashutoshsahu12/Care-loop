@@ -1,0 +1,5 @@
+{
+  "name": "careloop-deployment",
+  "private": true,
+  "engines": { "node": "22.x" }
+}

@@ -89,3 +89,33 @@ jobs:
             curl --fail --silent --show-error --retry 15 --retry-connrefused --retry-delay 1 "$url" > /dev/null
           done
           NODE_PATH="$RUNNER_TEMP/careloop-browser/node_modules" node .github/tests/careloop-walkthrough.cjs
+  hosted-demo:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            Member 1/package-lock.json
+            Member 2/package-lock.json
+      - name: Build using the Vercel project commands
+        run: |
+          bash -c "$(node -p 'require("./vercel.json").installCommand')"
+          bash -c "$(node -p 'require("./vercel.json").buildCommand')"
+      - name: Install browser test runner
+        run: |
+          npm install --prefix "$RUNNER_TEMP/careloop-browser" playwright@1.56.1
+          if browser=$(command -v google-chrome || command -v chromium); then
+            printf 'CARELOOP_CHROMIUM=%s\n' "$browser" >> "$GITHUB_ENV"
+          else
+            "$RUNNER_TEMP/careloop-browser/node_modules/.bin/playwright" install --with-deps chromium --only-shell
+          fi
+      - name: Verify standalone judge demo in Chromium
+        run: |
+          (cd 'Member 1' && exec node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 5173 --strictPort) > "$RUNNER_TEMP/careloop-hosted.log" 2>&1 &
+          frontend_pid=$!
+          trap 'kill "$frontend_pid" 2>/dev/null || true' EXIT
+          curl --fail --silent --show-error --retry 15 --retry-connrefused --retry-delay 1 http://127.0.0.1:5173/judge-demo > /dev/null
+          CARELOOP_BROWSER_DEMO=true NODE_PATH="$RUNNER_TEMP/careloop-browser/node_modules" node .github/tests/careloop-walkthrough.cjs
