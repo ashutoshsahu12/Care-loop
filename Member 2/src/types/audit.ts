@@ -7,6 +7,7 @@ export type CaseEventType =
   | "case_reassigned"
   | "status_changed"
   | "patient_acknowledged"
+  | "help_requested"
   | "referral_created"
   | "referral_status_updated"
   | "clinician_handoff"
