@@ -2,7 +2,7 @@ import { api, isDemoMode } from "./api";
 import { DEMO_PATIENT_ID, followUps, patients } from "../mocks/data";
 import { recordDemoCaseEvent } from "../mocks/caseEvents";
 import type { FollowUp, Role } from "../types";
-import { BACKEND_DEMO_PATIENT_REF, findDetailByPatientRef, getAllCaseDetails, getCaseDetails, toFollowUp, visibleCaseDetails } from "./backendBridge";
+import { findDetailByPatientRef, getAllCaseDetails, getCaseDetails, toFollowUp, visibleCaseDetails } from "./backendBridge";
 export const followupService = {
   async list(role?: Role, patientId?: string): Promise<FollowUp[]> {
     if (!isDemoMode) {
