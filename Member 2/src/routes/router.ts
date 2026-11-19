@@ -210,7 +210,7 @@ export class AppRouter {
       }
 
       // POST /api/cases/:id/help-requests — synthetic patient portal assistance
-      const helpMatch = path.match(/^\\/api\\/cases\\/([^/]+)\\/help-requests$/);
+      const helpMatch = path.match(/^\/api\/cases\/([^/]+)\/help-requests$/);
       if (method === "POST" && helpMatch) {
         const body = (await request.json()) as { message?: unknown };
         const message = typeof body.message === "string" ? body.message.trim() : "";
@@ -228,7 +228,7 @@ export class AppRouter {
       }
 
       // Record synthetic-data clinical review / outreach notes from Member 1.
-      const noteMatch = path.match(/^\\/api\\/cases\\/([^/]+)\\/(notes|communications)$/);
+      const noteMatch = path.match(/^\/api\/cases\/([^/]+)\/(notes|communications)$/);
       if (method === "POST" && noteMatch) {
         this.authService.checkPermission(user, ["admin", "clinician", "care_worker"]);
         const body = (await request.json()) as { text?: unknown; channel?: unknown; outcome?: unknown };
