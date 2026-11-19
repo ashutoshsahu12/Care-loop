@@ -2,13 +2,12 @@ import { api, isDemoMode } from "./api";
 import { DEMO_PATIENT_ID, appointments, patients } from "../mocks/data";
 import { recordDemoCaseEvent } from "../mocks/caseEvents";
 import type { Appointment, Role } from "../types";
-import { BACKEND_DEMO_PATIENT_REF, findDetailByPatientRef, getAllCaseDetails, toAppointment } from "./backendBridge";
+import { BACKEND_DEMO_PATIENT_REF, findDetailByPatientRef, getAllCaseDetails, toAppointment, visibleCaseDetails } from "./backendBridge";
 export const appointmentService = {
   async list(role?: Role, patientId?: string): Promise<Appointment[]> {
     if (!isDemoMode) {
       const details = await getAllCaseDetails();
-      return details.filter(d => role !== "patient" || d.patient.patientReference === (patientId || BACKEND_DEMO_PATIENT_REF))
-        .flatMap(d => d.appointments.map(a => toAppointment(d, a)));
+      return visibleCaseDetails(details, role, patientId).flatMap(d => d.appointments.map(a => toAppointment(d, a)));
     }
     if (role === "patient") {
       if (patientId !== DEMO_PATIENT_ID) return [];
