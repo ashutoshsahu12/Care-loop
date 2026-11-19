@@ -1,5 +1,5 @@
 import type { Priority } from "../types/admin";
-import type { EscalationRecord, EscalationType, AtRiskCase, FollowUpRiskReason } from "../types/admin";
+import type { EscalationRecord, AtRiskCase, FollowUpRiskReason } from "../types/admin";
 
 export interface CaseEscalationCheckInput {
   caseId: string;

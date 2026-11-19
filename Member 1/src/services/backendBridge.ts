@@ -1,3 +1,4 @@
+import { demoIdentityStorage, tokenKey } from "./demoTransport";
 /** Adapters between Member 2's canonical REST objects and Member 1's display models.
  *  Kept separate so existing standalone frontend demo data remains unchanged.
  */
@@ -216,7 +217,7 @@ api.interceptors.response.use(response => {
 
 export function getAllCaseDetails(): Promise<BackendCaseDetail[]> {
   const identity = typeof localStorage === "undefined"
-    ? "server" : (localStorage.getItem("careloop.accessToken") ?? "anonymous");
+    ? "server" : (demoIdentityStorage().getItem(tokenKey) ?? "anonymous");
   if (caseSnapshot && caseSnapshot.identity === identity && caseSnapshot.expiresAt > Date.now()) {
     return caseSnapshot.promise;
   }

@@ -1,14 +1,15 @@
 import axios from "axios";
 
-const tokenKey = "careloop.accessToken";
+import { browserDemo, demoFetch, demoIdentityStorage, tokenKey } from "./demoTransport";
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api",
+  baseURL: browserDemo ? "/api" : import.meta.env.VITE_API_BASE_URL || "http://localhost:8787/api",
+  ...(browserDemo ? { adapter: "fetch", env: { fetch: demoFetch } } : {}),
   timeout: 15_000,
   headers: { "Content-Type": "application/json" },
 });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem(tokenKey);
+  const token = demoIdentityStorage().getItem(tokenKey);
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -39,5 +40,5 @@ api.interceptors.response.use(
   },
 );
 
-export const isDemoMode = !import.meta.env.VITE_API_BASE_URL;
-export { tokenKey };
+export const isDemoMode = !browserDemo && !import.meta.env.VITE_API_BASE_URL;
+export { demoIdentityStorage, tokenKey };

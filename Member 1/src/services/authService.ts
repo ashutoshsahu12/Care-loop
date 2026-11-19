@@ -1,4 +1,4 @@
-import { isDemoMode, tokenKey } from "./api";
+import { demoIdentityStorage, isDemoMode, tokenKey } from "./api";
 import type { Role, User } from "../types";
 import { BACKEND_DEMO_PATIENT_REF } from "./backendBridge";
 
@@ -24,7 +24,7 @@ export const authService = {
         patient: { id: "usr-pt-1001", name: "Kavita Sundaram", initials: "KS" },
       };
       const profile = { ...account, ...connectedAccounts[account.role] };
-      localStorage.setItem(tokenKey, profile.id);
+      demoIdentityStorage().setItem(tokenKey, profile.id);
       return account.role === "patient" ? { ...profile, patientId: BACKEND_DEMO_PATIENT_REF } : profile;
     }
     await new Promise((resolve) => window.setTimeout(resolve, 300));
@@ -34,7 +34,7 @@ export const authService = {
   },
   async logout(): Promise<void> {
     // The synthetic backend has no session/logout endpoint; clear local demo role token.
-    localStorage.removeItem(tokenKey);
+    demoIdentityStorage().removeItem(tokenKey);
   },
   roleHome(role: Role): string {
     return role === "admin" ? "/dashboard/admin" : role === "doctor" ? "/dashboard/doctor" : role === "worker" ? "/dashboard/worker" : "/dashboard/patient";

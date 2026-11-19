@@ -23,7 +23,7 @@ import {
  *
  * Set VITE_CARELOOP_USE_DEMO_DATA=false in the host Vite app to use the API.
  */
-const USE_DEMO_DATA = shouldUseAdminDemoData(
+const USE_DEMO_DATA = import.meta.env.VITE_CARELOOP_BROWSER_DEMO !== "true" && shouldUseAdminDemoData(
   import.meta.env.VITE_CARELOOP_USE_DEMO_DATA,
   import.meta.env.VITE_CARELOOP_API_URL,
   import.meta.env.VITE_API_BASE_URL,

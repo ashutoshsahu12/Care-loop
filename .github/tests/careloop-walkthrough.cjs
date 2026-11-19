@@ -1,6 +1,7 @@
 const { chromium } = require('playwright');
 const assert = require('node:assert/strict');
 const root = process.env.CARELOOP_BROWSER_URL || 'http://127.0.0.1:5173';
+const hosted = process.env.CARELOOP_BROWSER_DEMO === 'true';
 const nextDate = new Date(Date.now()+86400000*2).toISOString().slice(0,10);
 const demoName = 'Intake · Browser Test';
 const seeded = 'Kavita Sundaram';
@@ -11,21 +12,32 @@ let stage = 'start';
   const writes = [];
   const screens = [];
   const step = (label) => { stage = label; process.stdout.write(label+'\n'); };
-  const login = async (role, label) => {
+  const createPage = async () => {
     const page = await browser.newPage();
     page.setDefaultTimeout(9000);
     page.on('pageerror', error => faults.push(error.message));
     page.on('response', response => {
-      if (!response.url().includes(':8787/')) return;
+      if (hosted ? !response.url().startsWith(root+'/') : !response.url().includes(':8787/')) return;
       const method = response.request().method();
-      if (method === 'POST' || method === 'PATCH') writes.push(`${role} ${method} ${response.status()} ${response.url()}`);
+      if (method === 'POST' || method === 'PATCH') writes.push(`${method} ${response.status()} ${response.url()}`);
+      if (hosted && new URL(response.url()).pathname.startsWith('/api/')) faults.push('Unexpected external API request: '+response.url());
       if (response.status() >= 400) faults.push(`${response.status()} ${response.url()}`);
     });
     screens.push(page);
-    await page.goto(root+'/login');
-    await page.getByRole('button',{name:label}).click();
-    await page.getByLabel('Password').fill('test-demo');
-    await page.getByRole('button',{name:'Sign in to CARELOOP'}).click();
+    return page;
+  };
+  const sharedPage = hosted ? await createPage() : undefined;
+  const login = async (role, label) => {
+    const page = sharedPage ?? await createPage();
+    if (hosted) {
+      await page.goto(root+'/login?role='+role);
+      await page.getByRole('button',{name:new RegExp('^Open as '+label.source, 'i')}).click();
+    } else {
+      await page.goto(root+'/login');
+      await page.getByRole('button',{name:label}).click();
+      await page.getByLabel('Password').fill('test-demo');
+      await page.getByRole('button',{name:'Sign in to CARELOOP'}).click();
+    }
     await page.waitForURL('**/dashboard/'+role);
     return page;
   };
@@ -40,6 +52,14 @@ let stage = 'start';
   };
   const has = (page,text) => page.getByText(text,{exact:false}).first().waitFor();
   try {
+    if (sharedPage) {
+      step('Judge walkthrough opens directly and calculates metrics from the seed');
+      await go(sharedPage, '/judge-demo');
+      await sharedPage.getByRole('heading', { name: 'Closing the screening-to-care loop' }).waitFor();
+      await has(sharedPage, '2 of 12');
+      await sharedPage.getByRole('link', { name: 'Open as care coordinator' }).click();
+      await sharedPage.getByRole('button', { name: 'Open as Care coordinator' }).waitFor();
+    }
     step('Care worker signs in and registers a patient');
     const worker = await login('worker',/Care coordinator/);
     await go(worker,'/patients');
@@ -48,10 +68,9 @@ let stage = 'start';
     await lbl(worker,'Gender').selectOption('Female');
     await lbl(worker,'Phone number').fill('5550123456');
     await lbl(worker,'Email address').fill('browser-intake@example.test');
-    const registrationResponse = worker.waitForResponse(response => response.url().endsWith('/api/patients') && response.request().method() === 'POST');
+    const registrationResponse = hosted ? null : worker.waitForResponse(response => response.url().endsWith('/api/patients') && response.request().method() === 'POST');
     await btn(worker,'Create patient').click();
-    const registered = await (await registrationResponse).json();
-    assert.match(registered.patientReference, /^CL-P-/);
+    let patientReference = registrationResponse ? (await (await registrationResponse).json()).patientReference : undefined;
     await has(worker,'Patient profile created successfully.');
     assert.equal(await worker.getByText(demoName,{exact:true}).count(),0);
     const screen = async (name, result) => {
@@ -67,6 +86,11 @@ let stage = 'start';
     await screen(demoName,'BP 150/95 · browser intake');
     await go(worker,'/patients');
     await has(worker,demoName);
+    if (hosted) {
+      const href = await worker.getByRole('link', { name: 'View '+demoName }).getAttribute('href');
+      patientReference = href.split('/').at(-1);
+    }
+    assert.match(patientReference, /^CL-P-/);
     step('Create a fresh case for the seeded patient to test all four roles');
     await screen(seeded,'BP 152/95 · browser workflow');
     await go(worker,'/referrals');
@@ -86,6 +110,7 @@ let stage = 'start';
     await doctor.getByRole('dialog', { name: 'Update referral' }).getByRole('button', { name: 'Update referral' }).click();
     await referral(doctor).getByText('Accepted',{exact:true}).waitFor();
     step('Care worker schedules a referral-linked visit and records attendance');
+    if (hosted) await login('worker',/Care coordinator/);
     await go(worker,'/appointments');
     await btn(worker,'Schedule appointment').click();
     await choose(worker,'Patient',seeded);
@@ -93,8 +118,13 @@ let stage = 'start';
     await lbl(worker,'Preferred date').fill(nextDate);
     await btn(worker,'Schedule visit').click();
     await has(worker,'Appointment scheduled.');
+    if (hosted) await login('doctor',/Doctor/);
     await go(doctor,'/referrals');
     await referral(doctor).getByText('Scheduled',{exact:true}).waitFor();
+    if (hosted) {
+      await login('worker',/Care coordinator/);
+      await go(worker,'/appointments');
+    }
     const visit = worker.locator('.appointment-list-item').filter({hasText:seeded});
     await visit.getByRole('button',{name:'Record attendance'}).click();
     await lbl(worker,'Notes').fill('Attended synthetic test consultation.');
@@ -111,6 +141,7 @@ let stage = 'start';
     await follow.getByRole('button',{name:'Mark complete'}).click();
     await follow.getByRole('button',{name:'Done'}).waitFor();
     step('Doctor verifies and closes the case');
+    if (hosted) await login('doctor',/Doctor/);
     await go(doctor,'/patient/CL-P-1001');
     const verify = doctor.locator('.close-case-card').getByRole('button');
     await verify.click();
@@ -136,7 +167,7 @@ let stage = 'start';
     step('Administrator sees the new case and connected admin screens');
     const admin = await login('admin',/Administrator/);
     await go(admin,'/care-cases');
-    const intakeCase = admin.getByRole('row').filter({ hasText: registered.patientReference });
+    const intakeCase = admin.getByRole('row').filter({ hasText: patientReference });
     await intakeCase.getByText('screening', { exact: true }).waitFor();
     const closedCase = admin.getByRole('row').filter({ hasText: 'CL-P-1001' }).filter({ hasText: 'Verified case closure completed' });
     await closedCase.getByText('completed', { exact: true }).waitFor();
@@ -144,6 +175,18 @@ let stage = 'start';
       await go(admin,path);
       await admin.locator('main h1').first().waitFor();
       await admin.waitForFunction(() => !document.querySelector('main')?.innerText.includes('Loading'));
+      if (path === '/care-escalations') await has(admin, 'CL-P-1006');
+    }
+    if (sharedPage) {
+      step('Judge metrics reflect the completed workflow and reset restores the seed');
+      await go(sharedPage, '/judge-demo');
+      await has(sharedPage, '3 of 14');
+      const independent = await createPage();
+      await go(independent, '/judge-demo');
+      await has(independent, '2 of 12');
+      sharedPage.once('dialog', dialog => void dialog.accept());
+      await btn(sharedPage, 'Reset synthetic cases').click();
+      await has(sharedPage, '2 of 12');
     }
     assert.deepEqual(faults,[]);
     console.log('Four-role browser walkthrough passed');

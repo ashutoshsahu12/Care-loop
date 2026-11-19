@@ -7,7 +7,7 @@ export default defineConfig({
   resolve: {
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
     // Member 3 is a sibling feature module: resolve its React and charts from this host app.
-    dedupe: ["react", "react-dom", "recharts"],
+    dedupe: ["react", "react-dom", "recharts", "zod"],
   },
   server: { fs: { allow: [fileURLToPath(new URL("..", import.meta.url))] } },
   build: {

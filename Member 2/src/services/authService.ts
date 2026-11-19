@@ -1,5 +1,5 @@
 import type { ID1Database } from "../db/client";
-import type { AuthContext, User, UserRole } from "../types/auth";
+import type { User, UserRole } from "../types/auth";
 
 export class AuthService {
   private db: ID1Database;
