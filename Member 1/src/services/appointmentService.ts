@@ -2,7 +2,7 @@ import { api, isDemoMode } from "./api";
 import { DEMO_PATIENT_ID, appointments, patients } from "../mocks/data";
 import { recordDemoCaseEvent } from "../mocks/caseEvents";
 import type { Appointment, Role } from "../types";
-import { BACKEND_DEMO_PATIENT_REF, findDetailByPatientRef, getAllCaseDetails, toAppointment, visibleCaseDetails } from "./backendBridge";
+import { findDetailByPatientRef, getAllCaseDetails, toAppointment, visibleCaseDetails } from "./backendBridge";
 export const appointmentService = {
   async list(role?: Role, patientId?: string): Promise<Appointment[]> {
     if (!isDemoMode) {
