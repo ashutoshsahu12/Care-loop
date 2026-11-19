@@ -72,7 +72,7 @@ export interface Appointment {
   date: string;
   time: string;
   clinician: string;
-  status: "Confirmed" | "Needs confirmation" | "Completed" | "Missed";
+  status: "Confirmed" | "Needs confirmation" | "Completed" | "Missed" | "Cancelled" | "Rescheduled";
 }
 
 export interface Referral {
@@ -94,7 +94,7 @@ export interface FollowUp {
   reason: string;
   due: string;
   owner: string;
-  status: "Overdue" | "Due today" | "Upcoming" | "Completed";
+  status: "Overdue" | "Due today" | "Upcoming" | "Completed" | "Cancelled";
   escalated?: boolean;
 }
 
