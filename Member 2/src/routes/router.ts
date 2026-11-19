@@ -91,12 +91,14 @@ export class AppRouter {
 
       // GET /api/admin/overview
       if (method === "GET" && path === "/api/admin/overview") {
+        this.authService.checkPermission(user, ["admin"]);
         const overview = await this.analyticsService.getOverview();
         return jsonResponse(overview);
       }
 
       // GET /api/admin/cases
       if (method === "GET" && path === "/api/admin/cases") {
+        this.authService.checkPermission(user, ["admin"]);
         const filters = CaseFilterQuerySchema.parse({
           status: url.searchParams.get("status") ?? undefined,
           priority: url.searchParams.get("priority") ?? undefined,
@@ -109,18 +111,21 @@ export class AppRouter {
 
       // GET /api/admin/escalations
       if (method === "GET" && path === "/api/admin/escalations") {
+        this.authService.checkPermission(user, ["admin"]);
         const escalations = await this.escalationService.getEscalations();
         return jsonResponse(escalations);
       }
 
       // GET /api/admin/at-risk
       if (method === "GET" && path === "/api/admin/at-risk") {
+        this.authService.checkPermission(user, ["admin"]);
         const atRisk = await this.escalationService.getAtRiskCases();
         return jsonResponse(atRisk);
       }
 
       // GET /api/admin/analytics
       if (method === "GET" && path === "/api/admin/analytics") {
+        this.authService.checkPermission(user, ["admin"]);
         const analytics = await this.analyticsService.getAnalytics();
         return jsonResponse(analytics);
       }
