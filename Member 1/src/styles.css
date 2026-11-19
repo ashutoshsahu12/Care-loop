@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* Include utility classes from Member 3 sibling admin components. */
+@source "../../Member 3/src";
 
 :root {
   font-family: "DM Sans", sans-serif;

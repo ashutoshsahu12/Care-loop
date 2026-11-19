@@ -20,7 +20,8 @@ export async function apiRequest<T>(
       ...(init.body ? { "Content-Type": "application/json" } : {}),
       ...init.headers,
     },
-    credentials: "include",
+    // This demo API does not use cross-origin cookies; wildcard CORS permits non-credentialed requests.
+    credentials: "omit",
   });
 
   if (!response.ok) {

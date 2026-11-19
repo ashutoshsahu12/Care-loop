@@ -26,6 +26,7 @@ import { teamMembers, type TeamMember } from "./mocks/team";
 import type { Appointment, CaseStatus, CaseTimelineEvent, FollowUp, Patient, Role, User } from "./types";
 import { Avatar, Badge, Card, EmptyState, ErrorState, LoadingState, Modal, PageHeader } from "./components/ui";
 import { Button } from "./components/ui/button";
+import { AdminDashboard as CareAdminDashboard, CaseMonitoring, EscalationMonitoring, LostToFollowUp, Analytics as CareAnalytics } from "../../Member 3/src/features/admin";
 
 type AuthContextValue = { user: User | null; signIn: (user: User) => void; signOut: () => Promise<void> };
 import { createContext, useContext } from "react";
@@ -49,6 +50,7 @@ const pathTitles: Record<string, string> = {
   dashboard: "Overview", patients: "Patients", team: "Care team", screenings: "Screening records", followups: "Follow-ups",
   appointments: "Appointments", referrals: "Referrals", notifications: "Notifications", analytics: "Analytics & reports",
   "my-case": "My care case",
+  "care-monitoring": "Care-loop overview", "care-cases": "Case monitoring", "care-escalations": "Escalations", "care-at-risk": "Lost to follow-up", "care-outcomes": "Care outcomes",
 };
 
 function ProtectedRoute({ allowed }: { allowed?: Role[] }) {
@@ -86,7 +88,7 @@ function AppLayout() {
     ? [{ label: "YOUR CARE", items: [{ label: "Overview", path: roleHome("patient"), icon: LayoutDashboard }, { label: "My case", path: "/my-case", icon: FileHeart }, { label: "My appointments", path: "/appointments", icon: CalendarDays }, { label: "Notifications", path: "/notifications", icon: Bell }] }]
     : [
       { label: "WORKSPACE", items: [{ label: "Overview", path: roleHome(user.role), icon: LayoutDashboard }, { label: "Patients", path: "/patients", icon: Users }, ...(user.role === "admin" ? [{ label: "Care team", path: "/team", icon: Stethoscope }] : []), { label: "Screening records", path: "/screenings", icon: ClipboardList }, { label: "Follow-ups", path: "/followups", icon: ClipboardCheck }, { label: "Appointments", path: "/appointments", icon: CalendarDays }, { label: "Referrals", path: "/referrals", icon: FileHeart }] },
-      ...(user.role === "admin" ? [{ label: "INSIGHTS", items: [{ label: "Analytics & reports", path: "/analytics", icon: Activity }] }] : []),
+      ...(user.role === "admin" ? [{ label: "INSIGHTS", items: [{ label: "Analytics & reports", path: "/analytics", icon: Activity }, { label: "Care-loop overview", path: "/care-monitoring", icon: LayoutDashboard }, { label: "Case monitoring", path: "/care-cases", icon: ClipboardCheck }, { label: "Escalations", path: "/care-escalations", icon: Bell }, { label: "At-risk cases", path: "/care-at-risk", icon: ShieldCheck }, { label: "Care outcomes", path: "/care-outcomes", icon: Activity }] }] : []),
       { label: "ACCOUNT", items: [{ label: "Notifications", path: "/notifications", icon: Bell }] },
     ];
   const currentTitle = pathTitles[location.pathname.split("/")[1]] || (location.pathname.startsWith("/patient/") ? "Patient details" : "Overview");
@@ -166,7 +168,7 @@ export default function App() {
             <Route path="/followups" element={<FollowUpsPage />} />
             <Route path="/referrals" element={<ReferralsPage />} />
           </Route>
-          <Route element={<ProtectedRoute allowed={["admin"]} />}><Route path="/dashboard/admin" element={<DashboardPage />} /><Route path="/analytics" element={<AnalyticsPage />} /></Route>
+          <Route element={<ProtectedRoute allowed={["admin"]} />}><Route path="/dashboard/admin" element={<DashboardPage />} /><Route path="/analytics" element={<AnalyticsPage />} /><Route path="/care-monitoring" element={<CareAdminDashboard />} /><Route path="/care-cases" element={<CaseMonitoring />} /><Route path="/care-escalations" element={<EscalationMonitoring />} /><Route path="/care-at-risk" element={<LostToFollowUp />} /><Route path="/care-outcomes" element={<CareAnalytics />} /></Route>
           <Route path="/appointments" element={<AppointmentsPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
       </Route></Route>
