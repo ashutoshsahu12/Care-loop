@@ -50,7 +50,7 @@ export const BACKEND_DEMO_PATIENT_ID = "pat-1001";
 export function displayStatus(status: string): CaseStatus {
   const map: Record<string, CaseStatus> = {
     unassigned: "In progress", screening: "In progress", referred: "Referred",
-    appointment_scheduled: "Appointment scheduled", in_care: "Resolved",
+    appointment_scheduled: "Appointment scheduled", in_care: "In care",
     overdue: "Overdue", completed: "Closed",
   };
   return map[status] ?? "In progress";
@@ -59,7 +59,7 @@ export function backendStatus(status: CaseStatus): string {
   const map: Record<CaseStatus, string> = {
     "In progress": "screening", "Awaiting patient": "screening",
     "Appointment scheduled": "appointment_scheduled", Referred: "referred",
-    Overdue: "overdue", Resolved: "in_care", Closed: "completed",
+    Overdue: "overdue", "In care": "in_care", Resolved: "in_care", Closed: "completed",
   };
   return map[status];
 }
