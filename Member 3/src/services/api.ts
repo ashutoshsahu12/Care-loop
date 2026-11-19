@@ -1,13 +1,15 @@
 /// <reference path="../types/env.d.ts" />
 import type { ApiError } from "../types/admin";
+import { resolveAdminApiBaseUrl } from "./config";
 
 /**
  * Small fetch wrapper scoped to Member 3.
  * Set VITE_CARELOOP_API_URL in the host app when the team API is available.
  */
-const API_BASE_URL = (
-  import.meta.env.VITE_CARELOOP_API_URL ?? ""
-).replace(/\/$/, "");
+const API_BASE_URL = resolveAdminApiBaseUrl(
+  import.meta.env.VITE_CARELOOP_API_URL,
+  import.meta.env.VITE_API_BASE_URL,
+);
 
 export async function apiRequest<T>(
   path: string,

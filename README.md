@@ -76,7 +76,7 @@ VITE_CARELOOP_API_URL=http://localhost:8787
 2. In `Member 1/`, run `npm ci`, copy `.env.example` to `.env.local`, then `npm run dev`.
 3. Open the Vite URL and choose a **synthetic demo role**. The demo password is not an actual authentication mechanism.
 4. The Member 1 admin sidebar includes Member 3 monitoring, escalations, at-risk cases and care outcomes, backed by Member 2's API.
-5. Without `VITE_API_BASE_URL`, Member 1 retains its original standalone mock mode. Without `VITE_CARELOOP_USE_DEMO_DATA=false`, Member 3 retains its standalone demo mode.
+5. With `VITE_API_BASE_URL` configured, both Member 1 and Member 3 automatically use the connected backend; `VITE_CARELOOP_API_URL` is optional if both share the same API origin. Set `VITE_CARELOOP_USE_DEMO_DATA=true` to force Member 3's standalone sample dashboard. With no backend URL configured, both modules retain their original mock modes.
 
 **Known demo boundaries:** use fictional data only. Connected-mode synthetic patient registration and screening-case creation are supported; real account authentication is not implemented. The backend uses a synthetic demo role token and a **file-backed SQLite database** (`Member 2/careloop-local.sqlite`) that preserves local edits across restarts. To reset the demo, stop the backend and delete that SQLite file; startup recreates the seed data. Set `DATABASE_PATH=:memory:` for an intentionally disposable session. Cloudflare deployment requires configuring a real D1 database binding and loading the schema/seed. Do not use this setup for real healthcare records.
 

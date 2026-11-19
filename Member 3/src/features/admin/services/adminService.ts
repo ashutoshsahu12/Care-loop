@@ -1,5 +1,6 @@
 /// <reference path="../../../types/env.d.ts" />
 import { apiRequest } from "../../../services/api";
+import { shouldUseAdminDemoData } from "../../../services/config";
 import type {
   AdminAnalytics,
   AdminOverview,
@@ -22,7 +23,11 @@ import {
  *
  * Set VITE_CARELOOP_USE_DEMO_DATA=false in the host Vite app to use the API.
  */
-const USE_DEMO_DATA = import.meta.env.VITE_CARELOOP_USE_DEMO_DATA !== "false";
+const USE_DEMO_DATA = shouldUseAdminDemoData(
+  import.meta.env.VITE_CARELOOP_USE_DEMO_DATA,
+  import.meta.env.VITE_CARELOOP_API_URL,
+  import.meta.env.VITE_API_BASE_URL,
+);
 
 function buildQuery(filters: CaseFilters = {}): string {
   const params = new URLSearchParams();
