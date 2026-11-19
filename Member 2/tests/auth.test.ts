@@ -75,4 +75,29 @@ describe("Auth and Role Permissions", () => {
     const body = (await patientRes.json()) as { message: string };
     expect(body.message).toMatch(/Forbidden/);
   });
+
+  it("prevents patients from accessing admin dashboard APIs", async () => {
+    const { router } = getFreshRouter();
+    const paths = [
+      "/api/admin/overview",
+      "/api/admin/cases",
+      "/api/admin/escalations",
+      "/api/admin/at-risk",
+      "/api/admin/analytics",
+    ];
+    for (const path of paths) {
+      const response = await router.handle(new Request(`http://localhost${path}`, {
+        headers: { "x-user-role": "patient" },
+      }));
+      expect(response.status, path).toBe(403);
+    }
+  });
+
+  it("still allows a development administrator to access admin dashboards", async () => {
+    const { router } = getFreshRouter();
+    const response = await router.handle(new Request("http://localhost/api/admin/overview", {
+      headers: { "x-user-role": "admin" },
+    }));
+    expect(response.status).toBe(200);
+  });
 });
