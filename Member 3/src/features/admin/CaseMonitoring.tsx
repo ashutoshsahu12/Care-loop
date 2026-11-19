@@ -12,6 +12,7 @@ export function CaseMonitoring() {
   useEffect(() => {
     let active = true;
     setLoading(true);
+    setError(null);
     adminService.getCases(filters)
       .then((data) => { if (active) setCases(data); })
       .catch((reason: unknown) => {
