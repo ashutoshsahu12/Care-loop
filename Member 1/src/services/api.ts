@@ -17,7 +17,16 @@ api.interceptors.response.use(
   (response) => response,
   (error: unknown) => {
     if (axios.isAxiosError(error)) {
-      const message = (error.response?.data as { detail?: string } | undefined)?.detail;
+      const response = error.response?.data as {
+        detail?: string; message?: string;
+        errors?: Array<{ path?: string; message: string }>;
+      } | undefined;
+      const validationMessage = response?.errors?.map(item =>
+        item.path ? `${item.path}: ${item.message}` : item.message
+      ).join("; ");
+      const message = response?.message === "Validation Error" && validationMessage
+        ? validationMessage
+        : response?.message || response?.detail || validationMessage;
       return Promise.reject(new Error(message || error.message || "Unable to reach CARELOOP services."));
     }
     return Promise.reject(error);
