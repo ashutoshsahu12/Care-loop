@@ -37,13 +37,16 @@ function requireDemoPatientCase(caseId: string, patientId: string): PatientCase 
 }
 
 export const caseService = {
-  async getMyCase(patientId?: string): Promise<PatientCase | undefined> {
+  async getMyCase(patientId?: string, caseId?: string): Promise<PatientCase | undefined> {
     if (!isDemoMode) {
-      const summary = await getPatientSummary(patientId || BACKEND_DEMO_PATIENT_REF);
-      if (!summary.activeCase) return undefined;
-      return toPatientCase(await getCaseDetails(summary.activeCase.id));
+      const reference = patientId || BACKEND_DEMO_PATIENT_REF;
+      const target = caseId || (await getPatientSummary(reference)).activeCase?.id;
+      if (!target) return undefined;
+      const detail = await getCaseDetails(target);
+      return detail.patient.patientReference === reference ? toPatientCase(detail) : undefined;
     }
-    return getDemoCase(patientId);
+    const demoCase = getDemoCase(patientId);
+    return caseId && demoCase?.caseId !== caseId ? undefined : demoCase;
   },
 
   async getTimeline(caseId: string, patientId?: string): Promise<CaseTimelineEvent[]> {
