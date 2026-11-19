@@ -83,7 +83,7 @@ export interface Referral {
   specialty: string;
   referredTo: string;
   date: string;
-  status: "Accepted" | "Pending" | "Scheduled";
+  status: "Accepted" | "Pending" | "Scheduled" | "Completed" | "Rejected" | "Cancelled";
 }
 
 export interface FollowUp {
