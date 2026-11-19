@@ -9,7 +9,13 @@ export const patientService = {
   async list(role?: Role, patientId?: string): Promise<Patient[]> {
     if (!isDemoMode) {
       const cases = await getAllCaseDetails();
-      const visibleCases = cases.filter(d => role !== "patient" || d.patient.patientReference === (patientId || BACKEND_DEMO_PATIENT_REF));
+      const seen = new Set<string>();
+      const latestCases = cases.filter(detail => {
+        if (seen.has(detail.patient.patientReference)) return false;
+        seen.add(detail.patient.patientReference);
+        return true;
+      });
+      const visibleCases = latestCases.filter(d => role !== "patient" || d.patient.patientReference === (patientId || BACKEND_DEMO_PATIENT_REF));
       if (role === "patient") return visibleCases.map(toPatient);
       const all = await getAllBackendPatients();
       const withCases = new Set(cases.map(d => d.patient.patientReference));
