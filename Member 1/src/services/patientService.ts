@@ -2,7 +2,7 @@ import { api, isDemoMode } from "./api";
 import { DEMO_PATIENT_ID, patients } from "../mocks/data";
 import { recordDemoCaseEvent } from "../mocks/caseEvents";
 import type { CaseStatus, Patient, Role } from "../types";
-import { BACKEND_DEMO_PATIENT_REF, backendStatus, findDetailByPatientRef, getAllBackendPatients, getAllCaseDetails, getCaseDetails, getBackendPatient, toPatient, toUnscreenedPatient } from "./backendBridge";
+import { BACKEND_DEMO_PATIENT_REF, backendStatus, findDetailByPatientRef, getAllBackendPatients, getAllCaseDetails, getCaseDetails, getBackendPatient, toPatient, toUnscreenedPatient, visibleCaseDetails } from "./backendBridge";
 
 const delay = () => new Promise((resolve) => window.setTimeout(resolve, 180));
 export const patientService = {
@@ -15,7 +15,7 @@ export const patientService = {
         seen.add(detail.patient.patientReference);
         return true;
       });
-      const visibleCases = latestCases.filter(d => role !== "patient" || d.patient.patientReference === (patientId || BACKEND_DEMO_PATIENT_REF));
+      const visibleCases = visibleCaseDetails(latestCases, role, patientId);
       if (role === "patient") return visibleCases.map(toPatient);
       const all = await getAllBackendPatients();
       const withCases = new Set(cases.map(d => d.patient.patientReference));
