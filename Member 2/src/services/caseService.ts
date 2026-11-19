@@ -487,13 +487,13 @@ export class CaseService {
         `SELECT id, case_id as caseId, type, title, message, status,
                 created_at as createdAt, acknowledged_at as acknowledgedAt
          FROM notifications
-         WHERE recipient_id = ? 
-            OR recipient_id = ?
-            OR recipient_id IN (SELECT id FROM users WHERE email = ?)
-            OR (case_id IS NOT NULL AND case_id IN (SELECT id FROM cases WHERE patient_id = ?))
+         WHERE recipient_role = 'patient'
+           AND (recipient_id = ?
+             OR recipient_id = ?
+             OR recipient_id IN (SELECT id FROM users WHERE email = ?))
          ORDER BY created_at DESC`
       )
-      .bind(patient.id, patient.patientReference, patient.email ?? "", patient.id)
+      .bind(patient.id, patient.patientReference, patient.email ?? "")
       .all<PatientNotificationView>();
 
     return {
