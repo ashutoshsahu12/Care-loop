@@ -11,6 +11,7 @@ import { TimelineService } from "../services/timelineService";
 import {
   AppointmentAttendanceSchema,
   AppointmentCreateSchema,
+  AppointmentRescheduleSchema,
   CaseAssignmentSchema,
   CaseFilterQuerySchema,
   CaseStatusTransitionSchema,
@@ -356,6 +357,15 @@ export class AppRouter {
         const caseId = aptCreateMatch[1];
         const appointments = await this.appointmentService.getAppointmentsByCase(caseId);
         return jsonResponse(appointments);
+      }
+
+      // PATCH /api/appointments/:id — modify an existing appointment, no duplicate rows.
+      const rescheduleMatch = path.match(/^\/api\/appointments\/([^/]+)$/);
+      if (method === "PATCH" && rescheduleMatch) {
+        this.authService.checkPermission(user, ["admin", "clinician", "care_worker"]);
+        const input = AppointmentRescheduleSchema.parse(await request.json());
+        const appointment = await this.appointmentService.rescheduleAppointment(rescheduleMatch[1], input, user);
+        return jsonResponse(appointment);
       }
 
       // PATCH /api/appointments/:id/attendance

@@ -49,14 +49,8 @@ export const appointmentService = {
   },
   async reschedule(id: string, date: string): Promise<void> {
     if (!isDemoMode) {
-      const details = await getAllCaseDetails();
-      const detail = details.find(d => d.appointments.some(a => a.id === id));
-      if (!detail) throw new Error("Appointment not found.");
       const scheduledTime = date.length === 10 ? `${date}T12:00:00.000Z` : new Date(date).toISOString();
-      await api.post(`/cases/${encodeURIComponent(detail.caseRecord.id)}/appointments`, {
-        scheduledTime, facility: "CARELOOP Demo Clinic", providerName: "Care team",
-      });
-      await api.patch(`/appointments/${encodeURIComponent(id)}/attendance`, { status: "rescheduled" });
+      await api.patch(`/appointments/${encodeURIComponent(id)}`, { scheduledTime });
       return;
     }
     const appointment = appointments.find((item) => item.id === id);

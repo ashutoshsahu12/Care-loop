@@ -77,6 +77,22 @@ export class NotificationService {
       throw new Error(`Notification '${notificationId}' not found`);
     }
 
+    // Repeated acknowledgement must not add duplicate timeline events.
+    if (existing.status === "acknowledged") {
+      return {
+        id: existing.id,
+        caseId: existing.case_id,
+        recipientId: existing.recipient_id,
+        recipientRole: existing.recipient_role,
+        type: existing.type,
+        title: existing.title,
+        message: existing.message,
+        status: "acknowledged",
+        acknowledgedAt: existing.acknowledged_at,
+        createdAt: existing.created_at,
+      };
+    }
+
     await this.db
       .prepare(`UPDATE notifications SET status = 'acknowledged', acknowledged_at = ? WHERE id = ?`)
       .bind(now, notificationId)

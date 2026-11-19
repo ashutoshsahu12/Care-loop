@@ -14,6 +14,7 @@ export type CaseEventType =
   | "referral_status_updated"
   | "clinician_handoff"
   | "appointment_scheduled"
+  | "appointment_rescheduled"
   | "attendance_recorded"
   | "follow_up_task_created"
   | "follow_up_task_completed"
