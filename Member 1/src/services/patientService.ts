@@ -9,14 +9,19 @@ export const patientService = {
   async list(role?: Role, patientId?: string): Promise<Patient[]> {
     if (!isDemoMode) {
       const cases = await getAllCaseDetails();
-      const seen = new Set<string>();
-      const latestCases = cases.filter(detail => {
-        if (seen.has(detail.patient.patientReference)) return false;
-        seen.add(detail.patient.patientReference);
-        return true;
-      });
-      const visibleCases = visibleCaseDetails(latestCases, role, patientId);
+      const latest = new Map<string, (typeof cases)[number]>();
+      for (const detail of cases) {
+        const patientRef = detail.patient.patientReference;
+        const existing = latest.get(patientRef);
+        if (!existing || (detail.caseRecord.createdAt ?? detail.caseRecord.lastActivityAt) >
+          (existing.caseRecord.createdAt ?? existing.caseRecord.lastActivityAt)) {
+          latest.set(patientRef, detail);
+        }
+      }
+      const visibleCases = visibleCaseDetails([...latest.values()], role, patientId);
       if (role === "patient") return visibleCases.map(toPatient);
+      // Unassigned registrations are visible to admin only, not arbitrary care-team users.
+      if (role === "doctor" || role === "worker") return visibleCases.map(toPatient);
       const all = await getAllBackendPatients();
       const withCases = new Set(cases.map(d => d.patient.patientReference));
       return [...visibleCases.map(toPatient), ...all.filter(p => !withCases.has(p.patientReference)).map(toUnscreenedPatient)];
@@ -28,7 +33,13 @@ export const patientService = {
   async get(id: string, role?: Role, patientId?: string): Promise<Patient | undefined> {
     if (!isDemoMode) {
       const detail = await findDetailByPatientRef(id);
-      return detail ? toPatient(detail) : toUnscreenedPatient(await getBackendPatient(id));
+      if (detail) {
+        if (visibleCaseDetails([detail], role, patientId).length === 0) return undefined;
+        return toPatient(detail);
+      }
+      // A patient with no assigned case is in the registration queue for admins only.
+      if (role === "doctor" || role === "worker" || role === "patient") return undefined;
+      return toUnscreenedPatient(await getBackendPatient(id));
     }
     await delay();
     const patient = patients.find((item) => item.id === id);
