@@ -16,13 +16,16 @@ export const authService = {
       // This is NOT password authentication and must never be used with real patient data.
       const account = demoUsers.find(item => item.email === email);
       if (!account || !password.trim()) throw new Error("Select a demo account and enter any password.");
-      const tokenByRole: Record<Role, string> = {
-        admin: "admin", doctor: "clinician", worker: "care_worker", patient: "patient",
+      // Use exact seeded user IDs so audit events match the signed-in demo persona.
+      const connectedAccounts: Record<Role, Pick<User, "id" | "name" | "initials">> = {
+        admin: { id: "usr-admin-1", name: "Dr. Vikram Patel", initials: "VP" },
+        doctor: { id: "usr-clin-1", name: "Dr. Neha Verma", initials: "NV" },
+        worker: { id: "usr-cw-1", name: "A. Sharma", initials: "AS" },
+        patient: { id: "usr-pt-1001", name: "Kavita Sundaram", initials: "KS" },
       };
-      localStorage.setItem(tokenKey, tokenByRole[account.role]);
-      return account.role === "patient"
-        ? { ...account, name: "Kavita Sundaram", initials: "KS", patientId: BACKEND_DEMO_PATIENT_REF }
-        : account;
+      const profile = { ...account, ...connectedAccounts[account.role] };
+      localStorage.setItem(tokenKey, profile.id);
+      return account.role === "patient" ? { ...profile, patientId: BACKEND_DEMO_PATIENT_REF } : profile;
     }
     await new Promise((resolve) => window.setTimeout(resolve, 300));
     const user = demoUsers.find((item) => item.email === email);
