@@ -24,6 +24,18 @@ function getDatabase(env: Env): ID1Database {
 
 export default {
   async fetch(request: Request, env: Env = {}): Promise<Response> {
+    // The current authentication service accepts demo role headers and uses a
+    // fallback admin user. Never expose that development-only identity model
+    // on a public production deployment.
+    const pathname = new URL(request.url).pathname;
+    const publicHealthCheck = request.method === "GET" &&
+      (pathname === "/" || pathname === "/health" || pathname === "/api/health");
+    if (env.ENVIRONMENT === "production" && !publicHealthCheck) {
+      return new Response(JSON.stringify({ message: "Service unavailable: production authentication is not configured." }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
     const db = getDatabase(env);
     const router = new AppRouter(db);
     return router.handle(request);
