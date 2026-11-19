@@ -53,3 +53,39 @@ jobs:
           curl -fsS -H "Authorization: Bearer admin" http://127.0.0.1:8787/api/admin/overview | grep -q '"totalPatients"'
       - run: npm test
         working-directory: 'Member 2'
+  browser:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            Member 1/package-lock.json
+            Member 2/package-lock.json
+      - run: npm ci && npm run build
+        working-directory: 'Member 1'
+        env:
+          VITE_API_BASE_URL: http://127.0.0.1:8787/api
+      - run: npm ci && npm run build
+        working-directory: 'Member 2'
+      - name: Install browser test runner
+        run: |
+          npm install --prefix "$RUNNER_TEMP/careloop-browser" playwright@1.56.1
+          if browser=$(command -v google-chrome || command -v chromium); then
+            printf 'CARELOOP_CHROMIUM=%s\n' "$browser" >> "$GITHUB_ENV"
+          else
+            "$RUNNER_TEMP/careloop-browser/node_modules/.bin/playwright" install --with-deps chromium --only-shell
+          fi
+      - name: Walk through the connected demo in Chromium
+        run: |
+          (cd 'Member 2' && DATABASE_PATH=:memory: exec node dist/server.js) > "$RUNNER_TEMP/careloop-api.log" 2>&1 &
+          backend_pid=$!
+          (cd 'Member 1' && exec node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 5173 --strictPort) > "$RUNNER_TEMP/careloop-ui.log" 2>&1 &
+          frontend_pid=$!
+          trap 'kill "$backend_pid" "$frontend_pid" 2>/dev/null || true' EXIT
+          for url in http://127.0.0.1:8787/api/health http://127.0.0.1:5173; do
+            curl --fail --silent --show-error --retry 15 --retry-connrefused --retry-delay 1 "$url" > /dev/null
+          done
+          NODE_PATH="$RUNNER_TEMP/careloop-browser/node_modules" node .github/tests/careloop-walkthrough.cjs

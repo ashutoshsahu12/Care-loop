@@ -20,13 +20,15 @@ export const referralService = {
     const assigned = new Set(patients.filter((patient) => role === "doctor" ? patient.doctor === "Dr. Maya Chen" : patient.coordinator === "Jordan Lee").map((patient) => patient.name));
     return demoReferrals.filter((referral) => assigned.has(referral.patient));
   },
-  async create(payload: { patient: string; patientId?: string; specialty: string; referredTo: string }): Promise<Referral> {
+  async create(payload: { patient: string; patientId?: string; specialty: string; referredTo: string; caseId?: string; handoffClinicianId?: string }): Promise<Referral> {
     if (!isDemoMode) {
-      const detail = await findDetailByPatientRef(payload.patientId || "") ??
-        (await getAllCaseDetails()).find(item => item.patient.name === payload.patient);
+      const detail = payload.caseId ? await getCaseDetails(payload.caseId)
+        : payload.patientId ? await findDetailByPatientRef(payload.patientId)
+        : (await getAllCaseDetails()).find(item => item.patient.name === payload.patient);
       if (!detail) throw new Error("Select an existing demo patient before creating a referral.");
       const result = (await api.post<{ id: string }>(`/cases/${encodeURIComponent(detail.caseRecord.id)}/referrals`, {
         specialty: payload.specialty, targetFacility: payload.referredTo, urgency: "routine",
+        handoffClinicianId: payload.handoffClinicianId,
       })).data;
       const updated = await getCaseDetails(detail.caseRecord.id);
       const referral = updated.referrals.find(item => item.id === result.id);

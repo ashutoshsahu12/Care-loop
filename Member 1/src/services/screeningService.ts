@@ -2,7 +2,7 @@ import { api, isDemoMode } from "./api";
 import { DEMO_PATIENT_ID, patients, screenings } from "../mocks/data";
 import { recordDemoCaseEvent } from "../mocks/caseEvents";
 import type { Role, Screening } from "../types";
-import { findDetailByPatientRef, getAllBackendPatients, getAllCaseDetails, getCaseDetails, toScreening, visibleCaseDetails } from "./backendBridge";
+import { getAllBackendPatients, getAllCaseDetails, getCaseDetails, toScreening, visibleCaseDetails } from "./backendBridge";
 /** Extract systolic pressure only from explicitly cardiovascular/BP demonstration results.
  * This feeds the backend's deterministic triage rules; it is not a diagnosis.
  */
@@ -30,18 +30,16 @@ export const screeningService = {
     const assigned = new Set(patients.filter((patient) => role === "doctor" ? patient.doctor === "Dr. Maya Chen" : patient.coordinator === "Jordan Lee").map((patient) => patient.name));
     return screenings.filter((record) => assigned.has(record.patient));
   },
-  async create(payload: { patient: string; patientId?: string; type: string; result: string; report?: File }): Promise<Screening> {
+  async create(payload: { patient: string; patientId?: string; type: string; result: string; report?: File; workerId?: string }): Promise<Screening> {
     if (!isDemoMode) {
       if (payload.report) throw new Error("File uploads are not enabled in the synthetic-data backend. Enter the screening result as text.");
-      const detail = await findDetailByPatientRef(payload.patientId || "") ??
-        (await getAllCaseDetails()).find(item => item.patient.name === payload.patient);
-      const targetPatient = detail?.patient ?? (await getAllBackendPatients()).find(item =>
-        item.patientReference === payload.patientId || item.name === payload.patient);
+      const targetPatient = (await getAllBackendPatients()).find(item =>
+        payload.patientId ? item.patientReference === payload.patientId : item.name === payload.patient);
       if (!targetPatient) throw new Error("Register or select an existing demo patient before screening.");
+      const score = extractDemoScreeningScore(payload.type, payload.result);
       const result = (await api.post<{ careCase: { id: string } }>("/screenings", {
         patientId: targetPatient.id, screeningType: payload.type, resultValue: payload.result,
-        ...(extractDemoScreeningScore(payload.type, payload.result) !== undefined
-          ? { score: extractDemoScreeningScore(payload.type, payload.result) } : {}),
+        score, assignedCareWorkerId: payload.workerId,
       })).data;
       const latest = await getCaseDetails(result.careCase.id);
       const screening = toScreening(latest);

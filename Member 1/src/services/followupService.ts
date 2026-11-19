@@ -18,10 +18,11 @@ export const followupService = {
     const assignedPatients = new Set(patients.filter((patient) => role === "doctor" ? patient.doctor === "Dr. Maya Chen" : patient.coordinator === "Jordan Lee").map((patient) => patient.name));
     return followUps.filter((followup) => assignedPatients.has(followup.patient));
   },
-  async create(payload: { patient: string; patientId?: string; reason: string; due: string; owner: string }): Promise<FollowUp> {
+  async create(payload: { patient: string; patientId?: string; caseId?: string; reason: string; due: string; owner: string }): Promise<FollowUp> {
     if (!isDemoMode) {
-      const detail = await findDetailByPatientRef(payload.patientId || "") ??
-        (await getAllCaseDetails()).find(d => d.patient.name === payload.patient);
+      const detail = payload.caseId ? await getCaseDetails(payload.caseId)
+        : payload.patientId ? await findDetailByPatientRef(payload.patientId)
+        : (await getAllCaseDetails()).find(d => d.patient.name === payload.patient);
       if (!detail) throw new Error("Select an existing case before creating a follow-up.");
       const workers: Record<string, string> = {
         "A. Sharma": "usr-cw-1", "R. Kumar": "usr-cw-2",

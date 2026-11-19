@@ -1,7 +1,7 @@
 import { api, isDemoMode } from "./api";
 import { DEMO_PATIENT_ID, notifications } from "../mocks/data";
 import type { CareNotification, Role } from "../types";
-import { BACKEND_DEMO_PATIENT_REF, getAllCaseDetails, getPatientSummary, visibleCaseDetails } from "./backendBridge";
+import { BACKEND_DEMO_PATIENT_REF, getPatientSummary } from "./backendBridge";
 type BackendNotification = { id: string; caseId?: string | null; title: string; message: string; createdAt: string; status: string; acknowledgedAt?: string | null };
 export function mapConnectedNotification(
   item: BackendNotification, role?: Role, patientId?: string
@@ -20,9 +20,7 @@ export const notificationService = {
     if (!isDemoMode) {
       const raw = role === "patient"
         ? (await getPatientSummary(patientId || BACKEND_DEMO_PATIENT_REF)).unreadNotifications
-        : (await Promise.all(visibleCaseDetails(await getAllCaseDetails(), role, patientId).map(async detail =>
-            (await api.get<BackendNotification[]>(`/cases/${encodeURIComponent(detail.caseRecord.id)}/notifications`)).data
-          ))).flat();
+        : (await api.get<BackendNotification[]>("/notifications")).data;
       return raw.map(item => mapConnectedNotification(item, role, patientId));
     }
     return role === "patient" ? patientId === DEMO_PATIENT_ID ? notifications.filter((item) => item.patientId === patientId) : [] : notifications.filter((item) => !item.patientId);

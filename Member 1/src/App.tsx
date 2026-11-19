@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { cloneElement, useEffect, useId, useState, type ReactElement } from "react";
 import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -17,6 +17,7 @@ import { appointments as demoAppointments, chartData, distributionData } from ".
 import { appointmentService } from "./services/appointmentService";
 import { api } from "./services/api";
 import { isDemoMode } from "./services/api";
+import { DEMO_CLINICIAN_NAMES, DEMO_WORKER_NAMES } from "./services/backendBridge";
 import { authService, demoUsers } from "./services/authService";
 import { caseService } from "./services/caseService";
 import { followupService } from "./services/followupService";
@@ -98,14 +99,14 @@ function AppLayout() {
     {mobileOpen && <button className="mobile-scrim" onClick={() => setMobileOpen(false)} aria-label="Close navigation" />}
     <aside className="sidebar">
       <div className="brand-row"><Link className="brand" to={roleHome(user.role)}><span className="brand-mark"><HeartPulse size={19} /></span>{!collapsed && <span>careloop<span className="brand-dot">.</span></span>}</Link><button className="collapse-btn" aria-label="Collapse sidebar" onClick={() => setCollapsed(!collapsed)}><ChevronLeft size={17} /></button></div>
-      {!collapsed && <div className="workspace-switch"><span className="workspace-icon"><ShieldCheck size={17} /></span><span className="workspace-copy"><strong>Bayview Health</strong><small>Care network</small></span><ChevronDown size={14} /></div>}
+      {!collapsed && <div className="workspace-switch"><span className="workspace-icon"><ShieldCheck size={17} /></span><span className="workspace-copy"><strong>{isDemoMode ? "Bayview Health" : "CARELOOP Demo Network"}</strong><small>Care network</small></span><ChevronDown size={14} /></div>}
       <nav className="side-nav">
         {sections.map((section) => <div className="nav-section" key={section.label}>
           {!collapsed && <div className="nav-section-label">{section.label}</div>}
           {section.items.map(({ label, path, icon: Icon }) => {
             const active = location.pathname === path || (label === "Patients" && location.pathname.startsWith("/patient/")) || (path === roleHome(user.role) && location.pathname === path);
             return <Link key={label} to={path} onClick={() => setMobileOpen(false)} className={`nav-link ${active ? "active" : ""}`} title={collapsed ? label : undefined}>
-              <Icon size={18} strokeWidth={active ? 2.2 : 1.8} /><span>{label}</span>{label === "Follow-ups" && <span className="nav-count">8</span>}{label === "Notifications" && unreadNotifications > 0 && <span className="nav-count">{unreadNotifications}</span>}
+              <Icon size={18} strokeWidth={active ? 2.2 : 1.8} /><span>{label}</span>{isDemoMode && label === "Follow-ups" && <span className="nav-count">8</span>}{label === "Notifications" && unreadNotifications > 0 && <span className="nav-count">{unreadNotifications}</span>}
             </Link>;
           })}
         </div>)}
@@ -160,7 +161,7 @@ export default function App() {
           <Route element={<ProtectedRoute allowed={["doctor"]} />}><Route path="/dashboard/doctor" element={<DashboardPage />} /></Route>
           <Route element={<ProtectedRoute allowed={["worker"]} />}><Route path="/dashboard/worker" element={<DashboardPage />} /></Route>
           <Route element={<ProtectedRoute allowed={["patient"]} />}><Route path="/dashboard/patient" element={<PatientDashboard />} /></Route>
-          <Route element={<ProtectedRoute allowed={["patient"]} />}><Route path="/my-case" element={<PatientCasePage />} /></Route>
+          <Route element={<ProtectedRoute allowed={["patient"]} />}><Route path="/my-case/:caseId?" element={<PatientCasePage />} /></Route>
           <Route element={<ProtectedRoute allowed={["admin", "doctor", "worker"]} />}>
             <Route path="/patients" element={<PatientsPage />} />
             <Route element={<ProtectedRoute allowed={["admin"]} />}><Route path="/team" element={<CareTeamPage />} /></Route>
@@ -224,8 +225,15 @@ function AuthPage() {
       <div className="auth-switch">Demo identities use synthetic case data and do not create real accounts.</div><div className="auth-security"><ShieldCheck size={14} /> Secure access · Demo environment</div></div></div></div>;
 }
 
-function Field({ label, children, error }: { label: string; children: React.ReactNode; error?: string }) {
-  return <label className="form-field"><span>{label}</span>{children}{error && <small className="field-error">{error}</small>}</label>;
+function Field({ label, children, error }: { label: string; children: ReactElement<{ id?: string; "aria-describedby"?: string; "aria-invalid"?: boolean }>; error?: string }) {
+  const id = useId();
+  const controlId = children.props.id ?? id;
+  const errorId = error ? `${controlId}-error` : undefined;
+  return <div className="form-field">
+    <label htmlFor={controlId}>{label}</label>
+    {cloneElement(children, { id: controlId, "aria-describedby": errorId, "aria-invalid": Boolean(error) })}
+    {error && <small id={errorId} className="field-error">{error}</small>}
+  </div>;
 }
 
 function MetricCard({ title, value, change, icon: Icon, tone, note }: { title: string; value: string; change?: string; icon: typeof Users; tone: string; note: string }) {
@@ -355,7 +363,7 @@ function PatientDashboard() {
   const [requested, setRequested] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpRequested, setHelpRequested] = useState(false);
-  const query = useQuery({ queryKey: ["patient", "me", user?.id], queryFn: () => patientService.getMyProfile(user?.id || "") });
+  const query = useQuery({ queryKey: ["patient", "me", user?.id], queryFn: () => patientService.getMyProfile(user?.id || "", user?.patientId) });
   const caseQuery = useQuery({ queryKey: ["patient-case", user?.patientId], queryFn: () => caseService.getMyCase(user?.patientId), enabled: Boolean(user) });
   const patientCase = caseQuery.data;
   const eventsQuery = useQuery({ queryKey: ["case-timeline", patientCase?.caseId], queryFn: () => caseService.getTimeline(patientCase!.caseId, patientCase!.patientId), enabled: Boolean(patientCase) });
@@ -383,10 +391,11 @@ function PatientDashboard() {
 
 function PatientCasePage() {
   const { user } = useAuth();
+  const { caseId } = useParams();
   const queryClient = useQueryClient();
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpSent, setHelpSent] = useState(false);
-  const query = useQuery({ queryKey: ["patient-case", user?.patientId], queryFn: () => caseService.getMyCase(user?.patientId), enabled: Boolean(user) });
+  const query = useQuery({ queryKey: ["patient-case", user?.patientId, caseId], queryFn: () => caseService.getMyCase(user?.patientId, caseId), enabled: Boolean(user) });
   const patientCase = query.data;
   const eventsQuery = useQuery({ queryKey: ["case-timeline", patientCase?.caseId], queryFn: () => caseService.getTimeline(patientCase!.caseId, patientCase!.patientId), enabled: Boolean(patientCase) });
   if (query.isLoading) return <LoadingState />;
@@ -482,12 +491,12 @@ function PatientsPage() {
   });
   return <div className="page-stack">
     <PageHeader eyebrow="CARE NETWORK" title="Patients" description="Manage patient profiles and keep every care journey moving." action={canCreate && <button className="btn btn-primary" onClick={() => setCreateOpen(true)}><Plus size={16} /> Add patient</button>} />
-    <div className="list-overview"><div><b>{query.data?.length ?? "—"}</b><span>Total patients</span></div><div><b>{query.data?.filter((p) => p.status !== "Closed").length ?? "—"}</b><span>Active cases</span></div><div><b>{query.data?.filter((p) => p.priority === "High").length ?? "—"}</b><span>High priority</span></div><div><b>{query.data?.filter((p) => p.status === "Overdue").length ?? "—"}</b><span>Overdue follow-ups</span></div></div>
+    <div className="list-overview"><div><b>{query.data?.length ?? "—"}</b><span>Total patients</span></div><div><b>{query.data?.filter((p) => p.caseId && p.status !== "Closed").length ?? "—"}</b><span>Active cases</span></div><div><b>{query.data?.filter((p) => p.caseId && p.status !== "Closed" && p.priority === "High").length ?? "—"}</b><span>High priority</span></div><div><b>{query.data?.filter((p) => p.status === "Overdue").length ?? "—"}</b><span>Overdue follow-ups</span></div></div>
     <Card className="table-card list-page-card"><div className="list-toolbar"><div className="search-field"><Search size={16} /><input placeholder="Search patients…" value={search} onChange={(e) => setSearch(e.target.value)} /><kbd>⌘ K</kbd></div><label className="filter-select"><Filter size={15} /><select value={status} onChange={(e) => setStatus(e.target.value)}><option>All statuses</option>{["In progress", "In care", "Awaiting patient", "Appointment scheduled", "Referred", "Overdue", "Resolved", "Closed"].map((item) => <option key={item}>{item}</option>)}</select><ChevronDown size={14} /></label><button className="btn btn-secondary btn-sm filter-extra" onClick={() => setStatus("All statuses")}><SlidersHorizontal size={14} /> Reset filters</button></div>
       {query.isLoading ? <LoadingState /> : query.error ? <ErrorState error={(query.error as Error).message} onRetry={() => void query.refetch()} /> : <PatientTable patients={patients} />}
       <div className="table-pagination"><span>Showing <b>{patients.length ? 1 : 0}–{patients.length}</b> of <b>{patients.length}</b> patients</span><div><button disabled><ChevronLeft size={15} /></button><button className="page-number active">1</button><button disabled><ChevronRight size={15} /></button></div></div>
     </Card>
-    {createOpen && <CreatePatientModal onClose={() => setCreateOpen(false)} onCreated={async () => { await queryClient.invalidateQueries({ queryKey: ["patients"] }); setCreated(true); setCreateOpen(false); }} />}
+    {createOpen && <CreatePatientModal onClose={() => setCreateOpen(false)} onCreated={async () => { await queryClient.invalidateQueries({ queryKey: ["patients"] }); await queryClient.invalidateQueries({ queryKey: ["screening-candidates"] }); setCreated(true); setCreateOpen(false); }} />}
     {created && <Toast message="Patient profile created successfully." onClose={() => setCreated(false)} />}
   </div>;
 }
@@ -621,7 +630,7 @@ function PatientDetailsPage() {
   const [teamOpen, setTeamOpen] = useState(false);
   const [toast, setToast] = useState("");
   const contactMutation = useMutation({
-    mutationFn: () => patientService.recordCommunication(id, "Phone call", "Contact attempt logged by care team."),
+    mutationFn: (caseId?: string) => patientService.recordCommunication(id, "Phone call", "Contact attempt logged by care team.", caseId),
     onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["patient", id] }); await queryClient.invalidateQueries({ queryKey: ["patients"] }); await refreshPatientCase(queryClient); setToast("Phone communication attempt recorded in the patient history."); },
     onError: (issue) => setToast(issue instanceof Error ? issue.message : "Could not record the communication attempt."),
   });
@@ -630,19 +639,20 @@ function PatientDetailsPage() {
   const patient = query.data;
   if (!patient) return <EmptyState title="Patient not found" description="This patient record may have been removed or is unavailable." />;
   if (user?.role === "patient" && patient.id !== user.patientId) return <Navigate to="/dashboard/patient" replace />;
+  const canUpdateCase = user?.role !== "patient" && patient.status !== "Closed" && (isDemoMode || Boolean(patient.caseId));
   return <div className="page-stack">
     <div className="back-link-row"><Link to={user?.role === "patient" ? "/dashboard/patient" : "/patients"} className="back-link"><ChevronLeft size={15} /> {user?.role === "patient" ? "My care" : "All patients"}</Link><span className="detail-id">PATIENT ID <b>{patient.id}</b></span></div>
-    <div className="patient-profile-header"><div className="patient-main-identity"><Avatar initials={patient.initials} size="lg" /><div><div className="identity-name-row"><h1>{patient.name}</h1><Badge tone={statusTone(patient.status)}><i className="badge-dot" />{patient.status}</Badge></div><p>{patient.age} years · {patient.gender} · {patient.location}</p><div className="identity-contact"><span>{patient.phone}</span><i /> <span>{patient.email}</span></div></div></div><div className="patient-actions">{user?.role !== "patient" && <><button className="btn btn-secondary btn-sm" disabled={contactMutation.isPending} onClick={() => contactMutation.mutate()}><Bell size={14} /> {contactMutation.isPending ? "Recording…" : "Log contact"}</button><button className="btn btn-primary btn-sm" onClick={() => navigate("/appointments")}><CalendarDays size={14} /> Schedule follow-up</button></>}</div></div>
+    <div className="patient-profile-header"><div className="patient-main-identity"><Avatar initials={patient.initials} size="lg" /><div><div className="identity-name-row"><h1>{patient.name}</h1><Badge tone={statusTone(patient.status)}><i className="badge-dot" />{patient.status}</Badge></div><p>{patient.age} years · {patient.gender} · {patient.location}</p><div className="identity-contact"><span>{patient.phone}</span><i /> <span>{patient.email}</span></div></div></div><div className="patient-actions">{canUpdateCase && <><button className="btn btn-secondary btn-sm" disabled={contactMutation.isPending} onClick={() => contactMutation.mutate(patient.caseId)}><Bell size={14} /> {contactMutation.isPending ? "Recording…" : "Log contact"}</button><button className="btn btn-primary btn-sm" onClick={() => navigate("/appointments")}><CalendarDays size={14} /> Schedule follow-up</button></>}</div></div>
     <div className="patient-detail-layout"><div className="patient-detail-primary">
       {patient.caseId ? timelineQuery.error ? <ErrorState error={(timelineQuery.error as Error).message} onRetry={() => void timelineQuery.refetch()} /> : <CaseTimeline events={timelineQuery.data || []} status={patient.status} loading={timelineQuery.isLoading} /> : <Card><EmptyState title="No linked case history" description="No case events have been recorded for this patient." /></Card>}
-      <Card className="patient-activity-card"><div className="card-heading"><div><h2>Latest screening record</h2><p>Screening result connected to this care journey</p></div><Link to="/screenings" className="inline-link">All records <ArrowRight size={14} /></Link></div><div className="detail-screening-row"><span className="screen-icon"><FileHeart size={20} /></span><div><b>{patient.screening}</b><small>{patient.result}</small></div><Badge tone="rose">Abnormal</Badge><Link to="/screenings" className="row-action"><ArrowRight size={16} /></Link></div><div className="screening-detail-meta"><span>RECEIVED<b>Nov 15, 2026 · 9:12 AM</b></span><span>REVIEWED BY<b>{patient.doctor}</b></span><span>RECOMMENDATION<b>Diagnostic follow-up required</b></span></div></Card>
-      {user?.role !== "patient" && <Card className="clinical-note-card"><div className="card-heading"><div><h2>Care team notes</h2><p>Internal notes · only visible to authorized care staff</p></div><button className="btn btn-secondary btn-sm" onClick={() => setNoteOpen(true)}><Plus size={14} /> Add note</button></div>{patient.clinicalNotes?.length ? patient.clinicalNotes.map((note) => <div className="note-entry" key={note.id}><Avatar initials={note.author.split(" ").map((part) => part[0]).join("").slice(-2)} size="sm" /><div><div><b>{note.author}</b><small>{note.createdAt}</small></div><p>{note.text}</p></div></div>) : <EmptyState title="No clinical notes yet" description="Add a note to document care-team review." />}</Card>}
-      {user?.role !== "patient" && <Card className="clinical-note-card"><div className="card-heading"><div><h2>Communication history</h2><p>Outreach attempts recorded for this patient</p></div><button className="btn btn-secondary btn-sm" disabled={contactMutation.isPending} onClick={() => contactMutation.mutate()}><Plus size={14} /> Log attempt</button></div>{patient.communicationLog?.length ? patient.communicationLog.map((entry) => <div className="communication-entry" key={entry.id}><span className="communication-icon"><Bell size={14} /></span><span><b>{entry.channel}</b><small>{entry.outcome}</small></span><time>{entry.createdAt}</time></div>) : <EmptyState title="No communication attempts yet" description="Record a phone call, message, or patient response." />}</Card>}
-      {(patient.status === "Resolved" || patient.status === "In care") && user?.role !== "patient" && <Card className="close-case-card"><span className="section-icon green"><CheckCheck size={17} /></span><div><b>Verify care completion</b><p>Close only after clinical documentation confirms the required follow-up is complete.</p></div><button className="btn btn-primary btn-sm" onClick={() => setClosureOpen(true)}>Review closure <ArrowRight size={14} /></button></Card>}
+      <Card className="patient-activity-card"><div className="card-heading"><div><h2>Latest screening record</h2><p>Screening result connected to this care journey</p></div><Link to="/screenings" className="inline-link">All records <ArrowRight size={14} /></Link></div><div className="detail-screening-row"><span className="screen-icon"><FileHeart size={20} /></span><div><b>{patient.screening}</b><small>{patient.result}</small></div>{patient.screeningStatus && <Badge tone={statusTone(patient.screeningStatus)}>{patient.screeningStatus}</Badge>}<Link to="/screenings" className="row-action"><ArrowRight size={16} /></Link></div>{patient.screeningDate && <div className="screening-detail-meta"><span>RECEIVED<b>{formatDateTime(patient.screeningDate)}</b></span>{patient.reviewState && <span>REVIEW STATUS<b>{patient.reviewState}</b></span>}</div>}</Card>
+      {user?.role !== "patient" && <Card className="clinical-note-card"><div className="card-heading"><div><h2>Care team notes</h2><p>Internal notes · only visible to authorized care staff</p></div>{canUpdateCase && <button className="btn btn-secondary btn-sm" onClick={() => setNoteOpen(true)}><Plus size={14} /> Add note</button>}</div>{patient.clinicalNotes?.length ? patient.clinicalNotes.map((note) => <div className="note-entry" key={note.id}><Avatar initials={note.author.split(" ").map((part) => part[0]).join("").slice(-2)} size="sm" /><div><div><b>{note.author}</b><small>{note.createdAt}</small></div><p>{note.text}</p></div></div>) : <EmptyState title="No clinical notes yet" description="Add a note to document care-team review." />}</Card>}
+      {user?.role !== "patient" && <Card className="clinical-note-card"><div className="card-heading"><div><h2>Communication history</h2><p>Outreach attempts recorded for this patient</p></div>{canUpdateCase && <button className="btn btn-secondary btn-sm" disabled={contactMutation.isPending} onClick={() => contactMutation.mutate(patient.caseId)}><Plus size={14} /> Log attempt</button>}</div>{patient.communicationLog?.length ? patient.communicationLog.map((entry) => <div className="communication-entry" key={entry.id}><span className="communication-icon"><Bell size={14} /></span><span><b>{entry.channel}</b><small>{entry.outcome}</small></span><time>{entry.createdAt}</time></div>) : <EmptyState title="No communication attempts yet" description="Record a phone call, message, or patient response." />}</Card>}
+      {(patient.status === "Resolved" || patient.status === "In care") && (user?.role === "admin" || user?.role === "doctor") && <Card className="close-case-card"><span className="section-icon green"><CheckCheck size={17} /></span><div><b>Verify care completion</b><p>Close only after clinical documentation confirms the required follow-up is complete.</p></div><button className="btn btn-primary btn-sm" onClick={() => setClosureOpen(true)}>Review closure <ArrowRight size={14} /></button></Card>}
     </div><aside className="patient-detail-aside">
-      <Card className="detail-side-card"><div className="card-heading"><div><h2>Care team</h2><p>Assigned to this patient</p></div><Users size={17} className="muted-icon" /></div><div className="team-person"><Avatar initials={patient.doctor.split(" ").map((p) => p[0]).join("").slice(-2)} size="sm" tone="avatar-doctor" /><span><b>{patient.doctor}</b><small>Primary care physician</small></span></div><div className="team-person"><Avatar initials={patient.coordinator.split(" ").map((p) => p[0]).join("").slice(-2)} size="sm" /><span><b>{patient.coordinator}</b><small>Care coordinator</small></span></div>{user?.role !== "patient" && <button className="btn btn-secondary btn-full btn-sm" onClick={() => setTeamOpen(true)}>Manage care team</button>}</Card>
-      <Card className="detail-side-card next-action-card"><div className="card-heading"><div><h2>Next action</h2><p>Keep this care journey moving</p></div><span className="section-icon amber"><Clock3 size={16} /></span></div><div className="next-action-callout"><small>{patient.status === "Overdue" ? "PAST DUE" : "UP NEXT"}</small><b>{patient.nextAction}</b><span><CalendarDays size={13} /> {patient.appointment || "Due today"}</span></div>{user?.role !== "patient" && <button className="btn btn-primary btn-full btn-sm" onClick={() => setProgressOpen(true)}>Update next step <ArrowRight size={14} /></button>}</Card>
-      <Card className="detail-side-card"><div className="card-heading"><div><h2>Case details</h2><p>Screening & priority</p></div><MoreHorizontal size={17} className="muted-icon" /></div><div className="detail-kv"><span>Priority</span><Badge tone={patient.priority === "High" ? "rose" : patient.priority === "Medium" ? "amber" : "green"}>{patient.priority}</Badge></div><div className="detail-kv"><span>Screening type</span><b>{patient.screening}</b></div><div className="detail-kv"><span>Patient since</span><b>Nov 02, 2026</b></div><div className="detail-kv"><span>Last activity</span><b>{patient.lastActivity}</b></div></Card>
+      <Card className="detail-side-card"><div className="card-heading"><div><h2>Care team</h2><p>Assigned to this patient</p></div><Users size={17} className="muted-icon" /></div><div className="team-person"><Avatar initials={patient.doctor.split(" ").map((p) => p[0]).join("").slice(-2)} size="sm" tone="avatar-doctor" /><span><b>{patient.doctor}</b><small>Primary care physician</small></span></div><div className="team-person"><Avatar initials={patient.coordinator.split(" ").map((p) => p[0]).join("").slice(-2)} size="sm" /><span><b>{patient.coordinator}</b><small>Care coordinator</small></span></div>{canUpdateCase && <button className="btn btn-secondary btn-full btn-sm" onClick={() => setTeamOpen(true)}>Manage care team</button>}</Card>
+      <Card className="detail-side-card next-action-card"><div className="card-heading"><div><h2>Next action</h2><p>Keep this care journey moving</p></div><span className="section-icon amber"><Clock3 size={16} /></span></div><div className="next-action-callout"><small>{patient.status === "Overdue" ? "PAST DUE" : "UP NEXT"}</small><b>{patient.nextAction}</b>{patient.status !== "Closed" && (patient.appointment || patient.dueAt) && <span><CalendarDays size={13} /> {patient.appointment || `Due ${formatDateTime(patient.dueAt || "")}`}</span>}</div>{canUpdateCase && <button className="btn btn-primary btn-full btn-sm" onClick={() => setProgressOpen(true)}>Update next step <ArrowRight size={14} /></button>}</Card>
+      <Card className="detail-side-card"><div className="card-heading"><div><h2>Case details</h2><p>Screening & priority</p></div><MoreHorizontal size={17} className="muted-icon" /></div><div className="detail-kv"><span>Priority</span><Badge tone={patient.priority === "High" ? "rose" : patient.priority === "Medium" ? "amber" : "green"}>{patient.priority}</Badge></div><div className="detail-kv"><span>Screening type</span><b>{patient.screening}</b></div>{patient.registeredAt && <div className="detail-kv"><span>Patient since</span><b>{new Date(patient.registeredAt).toLocaleDateString()}</b></div>}<div className="detail-kv"><span>Last activity</span><b>{patient.lastActivity}</b></div></Card>
     </aside></div>
     {closureOpen && <ClosureModal patient={patient} onClose={() => setClosureOpen(false)} onConfirm={async (note) => { await patientService.closeCase(patient.id, patient.caseId || "", note, user?.name || "Care team"); await queryClient.invalidateQueries({ queryKey: ["patient", patient.id] }); await queryClient.invalidateQueries({ queryKey: ["patients"] }); await refreshPatientCase(queryClient); setClosureOpen(false); setToast("Case closure verified and recorded."); }} />}
     {noteOpen && <ClinicalNoteModal patient={patient} author={user?.name || "Care team"} onClose={() => setNoteOpen(false)} onSaved={async () => { await queryClient.invalidateQueries({ queryKey: ["patient", patient.id] }); await refreshPatientCase(queryClient); setNoteOpen(false); setToast("Clinical note added to the internal care record."); }} />}
@@ -655,9 +665,9 @@ function PatientDetailsPage() {
 function ClinicalNoteModal({ patient, author, onClose, onSaved }: { patient: Patient; author: string; onClose: () => void; onSaved: () => Promise<void> }) {
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
-  const mutation = useMutation({ mutationFn: () => patientService.addClinicalNote(patient.id, note.trim(), author), onSuccess: onSaved, onError: (issue) => setError(issue instanceof Error ? issue.message : "Could not save this note.") });
+  const mutation = useMutation({ mutationFn: () => patientService.addClinicalNote(patient.id, note.trim(), author, patient.caseId), onSuccess: onSaved, onError: (issue) => setError(issue instanceof Error ? issue.message : "Could not save this note.") });
   return <Modal title="Add clinical note" description={`This note is internal to the care team and will not appear in the patient portal.`} onClose={onClose}>
-    <div className="form-stack modal-form"><div className="patient-note-context"><Avatar initials={patient.initials} size="sm" /><span><b>{patient.name}</b><small>{patient.id} · Internal care record</small></span></div><label className="form-field"><span>Clinical note</span><textarea rows={5} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Document clinical review, recommendations, or treatment progress…" /></label>{error && <div className="form-error">{error}</div>}<div className="modal-actions"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={note.trim().length < 8 || mutation.isPending} onClick={() => mutation.mutate()}>{mutation.isPending ? "Saving…" : "Save internal note"} <Check size={15} /></button></div></div>
+    <div className="form-stack modal-form"><div className="patient-note-context"><Avatar initials={patient.initials} size="sm" /><span><b>{patient.name}</b><small>{patient.id} · Internal care record</small></span></div><label className="form-field"><span>Clinical note</span><textarea rows={5} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Document clinical review, recommendations, or treatment progress…" /></label>{error && <div className="form-error">{error}</div>}<div className="modal-actions"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={note.trim().length < (isDemoMode ? 8 : 10) || mutation.isPending} onClick={() => mutation.mutate()}>{mutation.isPending ? "Saving…" : "Save internal note"} <Check size={15} /></button></div></div>
   </Modal>;
 }
 
@@ -665,11 +675,11 @@ function AssignCareTeamModal({ patient, onClose, onSaved }: { patient: Patient; 
   const physicians = teamMembers.filter((member) => member.role === "Physician");
   const coordinators = teamMembers.filter((member) => member.role === "Care coordinator");
   const [doctor, setDoctor] = useState(patient.doctor);
-  const [coordinator, setCoordinator] = useState(patient.coordinator);
+  const [coordinator, setCoordinator] = useState(isDemoMode || Object.values(DEMO_WORKER_NAMES).includes(patient.coordinator) ? patient.coordinator : "");
   const [error, setError] = useState("");
-  const mutation = useMutation({ mutationFn: () => patientService.assignCareTeam(patient.id, doctor, coordinator), onSuccess: onSaved, onError: (issue) => setError(issue instanceof Error ? issue.message : "Could not update the care team.") });
+  const mutation = useMutation({ mutationFn: () => patientService.assignCareTeam(patient.id, doctor, coordinator, patient.caseId), onSuccess: onSaved, onError: (issue) => setError(issue instanceof Error ? issue.message : "Could not update the care team.") });
   return <Modal title="Manage care team" description={`Set accountable owners for ${patient.name}’s care journey.`} onClose={onClose}>
-    <div className="form-stack modal-form"><Field label="Assigned physician"><select value={doctor} onChange={(event) => setDoctor(event.target.value)}>{physicians.map((member) => <option key={member.id}>{member.name}</option>)}</select></Field><Field label="Care coordinator"><select value={coordinator} onChange={(event) => setCoordinator(event.target.value)}>{coordinators.map((member) => <option key={member.id}>{member.name}</option>)}</select></Field><div className="request-info"><Users size={15} /><span>Assigned clinicians are responsible for reviewing results and coordinating the patient’s next step.</span></div>{error && <div className="form-error">{error}</div>}<div className="modal-actions"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={mutation.isPending}>{mutation.isPending ? "Saving…" : "Update care team"} <Check size={15} /></button></div></div>
+    <div className="form-stack modal-form">{isDemoMode && <Field label="Assigned physician"><select value={doctor} onChange={(event) => setDoctor(event.target.value)}>{physicians.map((member) => <option key={member.id}>{member.name}</option>)}</select></Field>}<Field label="Care coordinator"><select value={coordinator} onChange={(event) => setCoordinator(event.target.value)}>{isDemoMode ? coordinators.map(member => <option key={member.id}>{member.name}</option>) : <><option value="" disabled>Select a coordinator</option>{Object.values(DEMO_WORKER_NAMES).map(name => <option key={name}>{name}</option>)}</>}</select></Field><div className="request-info"><Users size={15} /><span>Assigned clinicians are responsible for reviewing results and coordinating the patient’s next step.</span></div>{error && <div className="form-error">{error}</div>}<div className="modal-actions"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={mutation.isPending}>{mutation.isPending ? "Saving…" : "Update care team"} <Check size={15} /></button></div></div>
   </Modal>;
 }
 
@@ -677,7 +687,7 @@ function ProgressUpdateModal({ patient, onClose, onSaved }: { patient: Patient; 
   const [nextAction, setNextAction] = useState(patient.nextAction);
   const [status, setStatus] = useState<Exclude<CaseStatus, "Closed">>(patient.status === "Closed" ? "Resolved" : patient.status);
   const [error, setError] = useState("");
-  const mutation = useMutation({ mutationFn: () => patientService.updateProgress(patient.id, nextAction.trim(), status), onSuccess: onSaved, onError: (issue) => setError(issue instanceof Error ? issue.message : "Could not update the care journey.") });
+  const mutation = useMutation({ mutationFn: () => patientService.updateProgress(patient.id, nextAction.trim(), status, patient.caseId), onSuccess: onSaved, onError: (issue) => setError(issue instanceof Error ? issue.message : "Could not update the care journey.") });
   return <Modal title="Update care journey" description="Record the current case status and the owner’s next action. Case closure requires a separate documented confirmation." onClose={onClose}>
     <div className="form-stack modal-form"><div className="patient-note-context"><Avatar initials={patient.initials} size="sm" /><span><b>{patient.name}</b><small>{patient.id} · {patient.doctor}</small></span></div><Field label="Case status"><select value={status} onChange={(event) => setStatus(event.target.value as Exclude<CaseStatus, "Closed">)}>{["In progress", "In care", "Awaiting patient", "Appointment scheduled", "Referred", "Overdue", "Resolved"].map((item) => <option key={item}>{item}</option>)}</select></Field><Field label="Next action"><input value={nextAction} onChange={(event) => setNextAction(event.target.value)} /></Field>{error && <div className="form-error">{error}</div>}<div className="modal-actions"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={nextAction.trim().length < 3 || mutation.isPending} onClick={() => mutation.mutate()}>{mutation.isPending ? "Saving…" : "Save update"} <Check size={15} /></button></div></div>
   </Modal>;
@@ -693,7 +703,7 @@ function ClosureModal({ patient, onClose, onConfirm }: { patient: Patient; onClo
     <label className="form-field"><span>Closure confirmation note</span><textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Document how follow-up or treatment was completed…" /></label>
     <label className="checkbox-row"><input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} /><span>I confirm the required follow-up or treatment has been completed and documented.</span></label>
     {error && <div className="form-error">{error}</div>}
-    <div className="modal-actions"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={!confirmed || note.trim().length < 8 || mutation.isPending} onClick={() => mutation.mutate()}>{mutation.isPending ? "Closing…" : "Confirm closure"} <Check size={15} /></button></div>
+    <div className="modal-actions"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={!confirmed || note.trim().length < (isDemoMode ? 8 : 10) || mutation.isPending} onClick={() => mutation.mutate()}>{mutation.isPending ? "Closing…" : "Confirm closure"} <Check size={15} /></button></div>
   </Modal>;
 }
 
@@ -709,12 +719,16 @@ function ScreeningsPage() {
   const rows = (query.data || []).filter((item) => `${item.patient} ${item.id} ${item.type}`.toLowerCase().includes(search.toLowerCase()) && (filter === "All results" || item.status === filter));
   return <div className="page-stack">
     <PageHeader eyebrow="SCREENING WORKSPACE" title="Screening records" description="Review results, identify abnormalities, and connect findings to follow-up." action={canUpload && <button className="btn btn-primary" onClick={() => setUploadOpen(true)}><FilePlus2 size={16} /> Add screening</button>} />
-    <div className="screening-stat-row"><div><span className="stat-dot rose" /><b>24</b><small>Abnormal results · need follow-up</small></div><div><span className="stat-dot amber" /><b>8</b><small>Pending clinical review</small></div><div><span className="stat-dot green" /><b>306</b><small>Reviewed this month</small></div></div>
+    <div className="screening-stat-row">
+      <div><span className="stat-dot rose" /><b>{query.data?.filter(record => record.status === "Abnormal").length ?? "—"}</b><small>Abnormal results</small></div>
+      <div><span className="stat-dot amber" /><b>{query.data?.filter(record => /pending|awaiting|escalated/i.test(record.reviewState || "")).length ?? "—"}</b><small>Awaiting clinical review</small></div>
+      <div><span className="stat-dot green" /><b>{query.data?.filter(record => /^reviewed/i.test(record.reviewState || "")).length ?? "—"}</b><small>Reviewed screenings</small></div>
+    </div>
     <Card className="table-card list-page-card"><div className="list-toolbar"><div className="search-field"><Search size={16} /><input placeholder="Search patient or screening type…" value={search} onChange={(e) => setSearch(e.target.value)} /></div><label className="filter-select"><Filter size={15} /><select value={filter} onChange={(e) => setFilter(e.target.value)}><option>All results</option><option>Abnormal</option><option>Normal</option><option>Pending review</option></select><ChevronDown size={14} /></label><button className="btn btn-secondary btn-sm" onClick={() => { setSearch(""); setFilter("All results"); }}><SlidersHorizontal size={14} /> Reset</button></div>
       {query.isLoading ? <LoadingState /> : query.error ? <ErrorState error={(query.error as Error).message} onRetry={() => void query.refetch()} /> : <div className="table-scroll"><table className="data-table screening-table"><thead><tr><th>SCREENING ID</th><th>PATIENT</th><th>SCREENING TYPE</th><th>RESULT</th><th>DATE RECEIVED</th><th>REVIEWED BY</th><th /></tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td><Link to={`/screening/${row.id}`} className="mono-link">{row.id}</Link></td><td><Link to={`/patient/${row.patientId || getPatientIdByName(row.patient)}`} className="person-cell"><Avatar initials={row.initials} size="sm" /><span><b>{row.patient}</b><small>Screening record</small></span></Link></td><td>{row.type}</td><td><div className="result-cell"><Badge tone={statusTone(row.status)}><i className="badge-dot" />{row.status}</Badge><small>{row.result}</small></div></td><td>{row.date}</td><td>{row.clinician}</td><td><Link className="row-action" to={`/screening/${row.id}`}><ChevronRight size={16} /></Link></td></tr>)}</tbody></table></div>}
       <div className="table-pagination"><span>Showing <b>{rows.length}</b> of <b>{query.data?.length || 0}</b> records</span><div><button disabled><ChevronLeft size={15} /></button><button className="page-number active">1</button><button disabled><ChevronRight size={15} /></button></div></div>
     </Card>
-    {uploadOpen && <CreateScreeningModal onClose={() => setUploadOpen(false)} onCreated={async () => { await queryClient.invalidateQueries({ queryKey: ["screenings"] }); await refreshPatientCase(queryClient); setUploadOpen(false); setNotice("Screening record saved and queued for review."); }} />}
+    {uploadOpen && <CreateScreeningModal onClose={() => setUploadOpen(false)} onCreated={async () => { await queryClient.invalidateQueries({ queryKey: ["screenings"] }); await queryClient.invalidateQueries({ queryKey: ["patients"] }); await queryClient.invalidateQueries({ queryKey: ["screening-candidates"] }); await refreshPatientCase(queryClient); setUploadOpen(false); setNotice("Screening record saved and queued for review."); }} />}
     {notice && <Toast message={notice} onClose={() => setNotice("")} />}
   </div>;
 }
@@ -723,17 +737,20 @@ function CreateScreeningModal({ onClose, onCreated }: { onClose: () => void; onC
   const { user } = useAuth();
   const patientQuery = useQuery({ queryKey: ["screening-candidates", user?.role], queryFn: () => patientService.listForScreening(user?.role) });
   const [patient, setPatient] = useState("");
+  const candidate = patientQuery.data?.find(item => item.id === patient);
   const [type, setType] = useState("");
   const [result, setResult] = useState("");
   const [report, setReport] = useState<File>();
   const [error, setError] = useState("");
   const mutation = useMutation({ mutationFn: screeningService.create, onSuccess: onCreated, onError: (issue) => setError(issue instanceof Error ? issue.message : "Could not save screening record.") });
   return <Modal title="Add screening record" description="Enter the screening result and connect it to the patient’s care journey." onClose={onClose}>
-    <form className="form-stack modal-form" onSubmit={(event) => { event.preventDefault(); if (!patient || !type || result.trim().length < 3) { setError("Select a patient and screening type, then enter the result summary."); return; } if (report && report.size > 10 * 1024 * 1024) { setError("The report must be smaller than 10 MB."); return; } setError(""); mutation.mutate({ patient: patient.split(" · ")[0], patientId: patient.split(" · ")[1], type, result: result.trim(), report }); }}>
-      <Field label="Patient"><select value={patient} onChange={(event) => setPatient(event.target.value)}><option value="">Select a patient</option>{(patientQuery.data || []).map((p) => <option key={p.id} value={`${p.name} · ${p.id}`}>{p.name} · {p.id}</option>)}</select></Field>
+    <form className="form-stack modal-form" onSubmit={(event) => { event.preventDefault(); if (!candidate || !type || result.trim().length < 3) { setError("Select a patient and screening type, then enter the result summary."); return; } if (report && report.size > 10 * 1024 * 1024) { setError("The report must be smaller than 10 MB."); return; } setError(""); mutation.mutate({ patient: candidate.name, patientId: candidate.id, type, result: result.trim(), report, workerId: user?.role === "worker" ? user.id : undefined }); }}>
+      <Field label="Patient"><select value={patient} onChange={(event) => setPatient(event.target.value)}><option value="">Select a patient</option>{(patientQuery.data || []).map((p) => <option key={p.id} value={p.id}>{p.name} · {p.id}</option>)}</select></Field>
+      {patientQuery.isLoading && <LoadingState />}
+      {patientQuery.error && <ErrorState error={patientQuery.error.message} onRetry={() => void patientQuery.refetch()} />}
       <Field label="Screening type"><select value={type} onChange={(event) => setType(event.target.value)}><option value="">Select screening type</option><option>Mammogram</option><option>Colorectal FIT</option><option>Cervical screening</option><option>Lung CT</option><option>Cardiovascular / blood pressure</option></select></Field>
       <Field label="Result summary"><input value={result} onChange={(event) => setResult(event.target.value)} placeholder="e.g. BI-RADS 4 · Suspicious finding" /></Field>
-      <label className="upload-zone"><FilePlus2 size={21} /><b>{report?.name || "Attach screening report"}</b><small>PDF or image · up to 10 MB</small><input type="file" accept=".pdf,image/*" onChange={(event) => setReport(event.target.files?.[0])} /></label>
+      {isDemoMode && <label className="upload-zone"><FilePlus2 size={21} /><b>{report?.name || "Attach screening report"}</b><small>PDF or image · up to 10 MB</small><input type="file" accept=".pdf,image/*" onChange={(event) => setReport(event.target.files?.[0])} /></label>}
       {report && report.size > 10 * 1024 * 1024 && <div className="form-error">The report must be smaller than 10 MB.</div>}
       {error && <div className="form-error">{error}</div>}<div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={mutation.isPending || (report ? report.size > 10 * 1024 * 1024 : false)}>{mutation.isPending ? "Saving…" : "Save record"} <Check size={15} /></button></div>
     </form>
@@ -794,14 +811,15 @@ function CreateFollowUpModal({ onClose, onCreated }: { onClose: () => void; onCr
   const { user } = useAuth();
   const patientsQuery = useQuery({ queryKey: ["patients", user?.role], queryFn: () => patientService.list(user?.role) });
   const [patient, setPatient] = useState("");
+  const selected = patientsQuery.data?.find(item => item.id === patient);
   const [reason, setReason] = useState("");
   const [due, setDue] = useState("");
   const [owner, setOwner] = useState(isDemoMode ? "Jordan Lee" : "A. Sharma");
   const [error, setError] = useState("");
   const mutation = useMutation({ mutationFn: followupService.create, onSuccess: onCreated, onError: (issue) => setError(issue instanceof Error ? issue.message : "Could not create follow-up.") });
   return <Modal title="Create follow-up" description="Assign a clear next step and due date to keep a patient’s care moving." onClose={onClose}>
-    <form className="form-stack modal-form" onSubmit={(event) => { event.preventDefault(); if (!patient || reason.trim().length < 3 || !due || !owner) { setError("Complete each field before adding the follow-up."); return; } setError(""); mutation.mutate({ patient: patient.split(" · ")[0], patientId: patient.split(" · ")[1], reason: reason.trim(), due: isDemoMode ? new Date(`${due}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : due, owner }); }}>
-      <Field label="Patient"><select value={patient} onChange={(event) => setPatient(event.target.value)}><option value="">Select a patient</option>{(patientsQuery.data || []).map((p) => <option key={p.id} value={`${p.name} · ${p.id}`}>{p.name} · {p.id}</option>)}</select></Field>
+    <form className="form-stack modal-form" onSubmit={(event) => { event.preventDefault(); if (!selected || reason.trim().length < 3 || !due || !owner) { setError("Complete each field before adding the follow-up."); return; } setError(""); mutation.mutate({ patient: selected.name, patientId: selected.id, caseId: selected.caseId, reason: reason.trim(), due: isDemoMode ? new Date(`${due}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : due, owner }); }}>
+      <Field label="Patient"><select value={patient} onChange={(event) => setPatient(event.target.value)}><option value="">Select a patient</option>{(patientsQuery.data || []).filter(p => isDemoMode || (p.caseId && p.status !== "Closed")).map((p) => <option key={p.id} value={p.id}>{p.name} · {p.id}</option>)}</select></Field>
       <Field label="Follow-up action"><input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="e.g. Confirm diagnostic appointment" /></Field>
       <div className="form-row"><Field label="Due date"><input type="date" min={new Date().toISOString().slice(0, 10)} value={due} onChange={(event) => setDue(event.target.value)} /></Field><Field label="Assigned to"><select value={owner} onChange={(event) => setOwner(event.target.value)}>{isDemoMode ? <><option>Jordan Lee</option><option>Sam Rivera</option><option>Alex Morgan</option></> :
         <><option>A. Sharma</option><option>R. Kumar</option><option>S. Iyer</option><option>M. Das</option></>}</select></Field></div>
@@ -824,18 +842,48 @@ function AppointmentsPage() {
   const [view, setView] = useState("Upcoming");
   const [notice, setNotice] = useState("");
   const [reschedule, setReschedule] = useState<Appointment | null>(null);
-  const rows = (query.data || []).filter((item) => isPatient || view === "All appointments" || item.status !== "Completed");
+  const [attendance, setAttendance] = useState<Appointment | null>(null);
+  const isScheduled = (item: Appointment) => item.status === "Confirmed" || item.status === "Needs confirmation";
+  const upcoming = (query.data || []).filter(isScheduled).sort((a, b) =>
+    Date.parse(a.scheduledAt || a.date) - Date.parse(b.scheduledAt || b.date));
+  const nextAppointment = upcoming[0];
+  const rows = view === "All appointments" ? query.data || [] : upcoming;
   return <div className="page-stack"><PageHeader eyebrow={isPatient ? "YOUR CARE" : "CARE COORDINATION"} title={isPatient ? "My appointments" : "Appointments"} description={isPatient ? "View upcoming visits and request a different time if needed." : "Coordinate consultations, diagnostic procedures, and patient check-ins."} action={<button className="btn btn-primary" onClick={() => setRequestOpen(true)}><Plus size={16} /> {isPatient ? "Request appointment" : "Schedule appointment"}</button>} />
-    <div className="appointment-highlight"><div className="highlight-icon"><CalendarDays size={20} /></div><div><span>NEXT UP</span><h2>{rows[0]?.type || "No appointments scheduled"}</h2><p>{rows[0] ? `${rows[0].patient} · ${rows[0].date} at ${rows[0].time}` : "Appointments will appear here when scheduled."}</p></div><div className="highlight-right"><Badge tone={statusTone(rows[0]?.status || "neutral")}>{rows[0]?.status || "No upcoming visit"}</Badge>{rows[0] && <button className="btn btn-secondary btn-sm" onClick={() => navigate(isPatient ? "/dashboard/patient" : `/patient/${rows[0].patientId || getPatientIdByName(rows[0].patient)}`)}>View details <ArrowRight size={14} /></button>}</div></div>
+    <div className="appointment-highlight"><div className="highlight-icon"><CalendarDays size={20} /></div><div><span>NEXT UP</span><h2>{nextAppointment?.type || "No appointments scheduled"}</h2><p>{nextAppointment ? `${nextAppointment.patient} · ${nextAppointment.date} at ${nextAppointment.time}` : "Appointments will appear here when scheduled."}</p></div><div className="highlight-right"><Badge tone={statusTone(nextAppointment?.status || "neutral")}>{nextAppointment?.status || "No upcoming visit"}</Badge>{nextAppointment && <button className="btn btn-secondary btn-sm" onClick={() => navigate(isPatient ? "/dashboard/patient" : `/patient/${nextAppointment.patientId || getPatientIdByName(nextAppointment.patient)}`)}>View details <ArrowRight size={14} /></button>}</div></div>
     <Card className="table-card appointments-list-card"><div className="card-heading"><div><h2>{isPatient ? "Your schedule" : "Appointment schedule"}</h2><p>All upcoming patient visits</p></div><label className="filter-select"><CalendarDays size={15} /><select value={view} onChange={(e) => setView(e.target.value)}><option>Upcoming</option><option>All appointments</option></select><ChevronDown size={14} /></label></div>
-      {query.isLoading ? <LoadingState /> : query.error ? <ErrorState error={(query.error as Error).message} onRetry={() => void query.refetch()} /> : <div className="appointment-list">{rows.map((item) => <div className="appointment-list-item" key={item.id}><AppointmentRow appointment={item} />{!isPatient && <div className="appointment-item-actions"><button className="icon-btn" title="Reschedule" aria-label={`Reschedule ${item.patient}`} onClick={() => setReschedule(item)}><CalendarDays size={16} /></button></div>}</div>)}</div>}
+      {query.isLoading ? <LoadingState /> : query.error ? <ErrorState error={(query.error as Error).message} onRetry={() => void query.refetch()} /> : <div className="appointment-list">{rows.map((item) => <div className="appointment-list-item" key={item.id}><AppointmentRow appointment={item} />{!isPatient && <div className="appointment-item-actions">
+        {(isScheduled(item) || item.status === "Missed" || item.status === "Rescheduled") && <button className="icon-btn" title="Reschedule" aria-label={`Reschedule ${item.patient}`} onClick={() => setReschedule(item)}><CalendarDays size={16} /></button>}
+        {!isDemoMode && isScheduled(item) && <button className="btn btn-secondary btn-sm" onClick={() => setAttendance(item)}>Record attendance</button>}
+      </div>}</div>)}</div>}
       {!rows.length && !query.isLoading && <EmptyState title="No appointments scheduled" description="New appointment details will appear here." />}
       <div className="table-pagination"><span><b>{rows.length}</b> appointments</span><div><button disabled><ChevronLeft size={15} /></button><button className="page-number active">1</button><button disabled><ChevronRight size={15} /></button></div></div>
     </Card>
-    {requestOpen && <AppointmentRequestModal onClose={() => setRequestOpen(false)} onRequest={async () => { await queryClient.invalidateQueries({ queryKey: ["appointments"] }); await refreshPatientCase(queryClient); setRequestOpen(false); setNotice("Appointment request sent to the care team."); }} patientName={isPatient ? user.name : undefined} patientId={user?.patientId} />}
-    {reschedule && <RescheduleModal appointment={reschedule} onClose={() => setReschedule(null)} onSaved={async () => { await queryClient.invalidateQueries({ queryKey: ["appointments"] }); await refreshPatientCase(queryClient); setReschedule(null); setNotice("Appointment rescheduled and is awaiting patient confirmation."); }} />}
+    {requestOpen && <AppointmentRequestModal onClose={() => setRequestOpen(false)} onRequest={async () => { await queryClient.invalidateQueries({ queryKey: ["appointments"] }); await refreshPatientCase(queryClient); setRequestOpen(false); setNotice(isPatient ? "Appointment request sent to the care team." : "Appointment scheduled."); }} patientName={isPatient ? user.name : undefined} patientId={user?.patientId} />}
+    {reschedule && <RescheduleModal appointment={reschedule} onClose={() => setReschedule(null)} onSaved={async () => { await queryClient.invalidateQueries({ queryKey: ["appointments"] }); await refreshPatientCase(queryClient); setReschedule(null); setNotice("Appointment rescheduled."); }} />}
+    {attendance && <AppointmentAttendanceModal appointment={attendance} onClose={() => setAttendance(null)} onSaved={async () => {
+      await Promise.all(["appointments", "patients", "patient", "referrals"].map(key => queryClient.invalidateQueries({ queryKey: [key] })));
+      await refreshPatientCase(queryClient);
+      setAttendance(null);
+      setNotice("Appointment outcome recorded.");
+    }} />}
     {notice && <Toast message={notice} onClose={() => setNotice("")} />}
   </div>;
+}
+
+function AppointmentAttendanceModal({ appointment, onClose, onSaved }: { appointment: Appointment; onClose: () => void; onSaved: () => Promise<void> }) {
+  const [status, setStatus] = useState<"attended" | "no_show" | "cancelled">("attended");
+  const [notes, setNotes] = useState("");
+  const mutation = useMutation({ mutationFn: () => appointmentService.recordAttendance(appointment.id, status, notes.trim()), onSuccess: onSaved });
+  return <Modal title="Record appointment outcome" description={appointment.patient} onClose={onClose}>
+    <form className="form-stack modal-form" onSubmit={event => { event.preventDefault(); mutation.mutate(); }}>
+      <Field label="Outcome"><select value={status} onChange={event => setStatus(event.target.value as typeof status)}>
+        <option value="attended">Attended</option><option value="no_show">Missed</option><option value="cancelled">Cancelled</option>
+      </select></Field>
+      <Field label="Notes"><textarea rows={3} value={notes} onChange={event => setNotes(event.target.value)} /></Field>
+      {mutation.error && <div className="form-error">{mutation.error.message}</div>}
+      <div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={mutation.isPending}>Save outcome</button></div>
+    </form>
+  </Modal>;
 }
 
 function RescheduleModal({ appointment, onClose, onSaved }: { appointment: Appointment; onClose: () => void; onSaved: () => Promise<void> }) {
@@ -843,25 +891,44 @@ function RescheduleModal({ appointment, onClose, onSaved }: { appointment: Appoi
   const [error, setError] = useState("");
   const mutation = useMutation({ mutationFn: () => appointmentService.reschedule(appointment.id, date), onSuccess: onSaved, onError: (issue) => setError(issue instanceof Error ? issue.message : "Could not reschedule this appointment.") });
   return <Modal title="Reschedule appointment" description={`${appointment.patient} · ${appointment.type}`} onClose={onClose}>
-    <div className="form-stack modal-form"><Field label="New date"><input type="date" min={new Date().toISOString().slice(0, 10)} value={date} onChange={(event) => setDate(event.target.value)} /></Field><div className="request-info"><Bell size={15} /><span>The patient will need to confirm the new appointment time.</span></div>{error && <div className="form-error">{error}</div>}<div className="modal-actions"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={!date || mutation.isPending} onClick={() => mutation.mutate()}>{mutation.isPending ? "Saving…" : "Update appointment"} <CalendarDays size={14} /></button></div></div>
+    <div className="form-stack modal-form"><Field label="New date"><input type="date" min={new Date().toISOString().slice(0, 10)} value={date} onChange={(event) => setDate(event.target.value)} /></Field><div className="request-info"><Bell size={15} /><span>The new date will appear in the patient’s appointment list.</span></div>{error && <div className="form-error">{error}</div>}<div className="modal-actions"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={!date || mutation.isPending} onClick={() => mutation.mutate()}>{mutation.isPending ? "Saving…" : "Update appointment"} <CalendarDays size={14} /></button></div></div>
   </Modal>;
 }
 
 function AppointmentRequestModal({ onClose, onRequest, patientName, patientId }: { onClose: () => void; onRequest: () => Promise<void>; patientName?: string; patientId?: string }) {
   const { user } = useAuth();
-  const [selectedPatient, setSelectedPatient] = useState(patientName ? `${patientName} · ${patientId || ""}` : "");
+  const [selectedPatient, setSelectedPatient] = useState(patientId || "");
+  const [referralId, setReferralId] = useState("");
   const [date, setDate] = useState("");
   const [type, setType] = useState("Follow-up consultation");
+  const [facility, setFacility] = useState("");
+  const [provider, setProvider] = useState("");
   const [error, setError] = useState("");
   const query = useQuery({ queryKey: ["patients", user?.role], queryFn: () => patientService.list(user?.role), enabled: !patientName });
   const patientCaseQuery = useQuery({ queryKey: ["patient-case", patientId], queryFn: () => caseService.getMyCase(patientId), enabled: Boolean(patientName) });
-  const mutation = useMutation({ mutationFn: () => appointmentService.request(selectedPatient.split(" · ")[0], date, type, selectedPatient.split(" · ")[1], patientCaseQuery.data?.caseId), onSuccess: onRequest, onError: (issue) => setError(issue instanceof Error ? issue.message : "Could not submit request.") });
-  return <Modal title={patientName ? "Request an appointment" : "Schedule an appointment"} description="Choose a visit type and preferred date. Your care team will confirm availability." onClose={onClose}>
+  const selectedProfile = query.data?.find(patient => patient.id === selectedPatient);
+  const referralsQuery = useQuery({ queryKey: ["referrals", user?.role], queryFn: () => referralService.list(user?.role), enabled: !isDemoMode && !patientName });
+  const referrals = referralsQuery.data?.filter(referral => referral.caseId === selectedProfile?.caseId && (referral.status === "Accepted" || referral.status === "Scheduled")) || [];
+  const mutation = useMutation({ mutationFn: () => appointmentService.request(
+    patientName || selectedProfile?.name || "", date, type, selectedPatient, patientCaseQuery.data?.caseId || selectedProfile?.caseId,
+    { referralId: referralId || undefined, facility: facility.trim(), provider: provider.trim() || selectedProfile?.doctor }
+  ), onSuccess: onRequest, onError: (issue) => setError(issue instanceof Error ? issue.message : "Could not submit request.") });
+  return <Modal title={patientName ? "Request an appointment" : "Schedule an appointment"} description={patientName ? "Choose a visit type and preferred date. Your care team will confirm availability." : "Choose a patient, a visit date, and any linked referral."} onClose={onClose}>
     <form className="form-stack modal-form" onSubmit={(e) => { e.preventDefault(); if (!selectedPatient || !date || (patientName && !patientCaseQuery.data?.caseId)) { setError("Choose a patient and preferred date, and make sure your case is linked."); return; } setError(""); mutation.mutate(); }}>
-      {!patientName && <Field label="Patient"><select value={selectedPatient} onChange={(e) => setSelectedPatient(e.target.value)}><option value="">Select a patient</option>{(query.data || []).map((p) => <option key={p.id} value={`${p.name} · ${p.id}`}>{p.name} · {p.id}</option>)}</select></Field>}
-      <Field label="Appointment type"><select value={type} onChange={(e) => setType(e.target.value)}><option>Follow-up consultation</option><option>Diagnostic imaging</option><option>Specialist consultation</option><option>Care coordination call</option></select></Field>
+      {!patientName && <Field label="Patient"><select value={selectedPatient} onChange={(e) => { setSelectedPatient(e.target.value); setReferralId(""); setFacility(""); setProvider(""); }}><option value="">Select a patient</option>{(query.data || []).filter(p => isDemoMode || (p.caseId && p.status !== "Closed")).map((p) => <option key={p.id} value={p.id}>{p.name} · {p.id}</option>)}</select></Field>}
+      {!patientName && !isDemoMode && referrals.length > 0 && <Field label="Linked referral"><select value={referralId} onChange={e => {
+        setReferralId(e.target.value);
+        setFacility(referrals.find(referral => referral.id === e.target.value)?.referredTo || "");
+      }}>
+        <option value="">No referral</option>{referrals.map(referral => <option key={referral.id} value={referral.id}>{referral.specialty} · {referral.referredTo}</option>)}
+      </select></Field>}
+      {!patientName && !isDemoMode && <>
+        <Field label="Facility"><input value={facility} onChange={e => setFacility(e.target.value)} placeholder="CARELOOP Demo Clinic" /></Field>
+        <Field label="Provider"><input value={provider} onChange={e => setProvider(e.target.value)} placeholder={selectedProfile?.doctor || "Care team"} /></Field>
+      </>}
+      {(patientName || isDemoMode) && <Field label="Appointment type"><select value={type} onChange={(e) => setType(e.target.value)}><option>Follow-up consultation</option><option>Diagnostic imaging</option><option>Specialist consultation</option><option>Care coordination call</option></select></Field>}
       <Field label="Preferred date"><input type="date" value={date} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setDate(e.target.value)} /></Field>
-      <div className="request-info"><Bell size={15} /><span>Your care team will contact you to confirm the appointment details.</span></div>
+      {patientName && <div className="request-info"><Bell size={15} /><span>Your care team will contact you to confirm the appointment details.</span></div>}
       {error && <div className="form-error">{error}</div>}<div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={mutation.isPending}>{mutation.isPending ? "Sending…" : patientName ? "Send request" : "Schedule visit"} <ArrowRight size={15} /></button></div>
     </form>
   </Modal>;
@@ -878,9 +945,9 @@ function ReferralsPage() {
   const [guidanceOpen, setGuidanceOpen] = useState(false);
   const rows = (query.data || []).filter((item) => filter === "All referrals" || item.status === filter);
   return <div className="page-stack"><PageHeader eyebrow="SPECIALTY CARE" title="Referrals" description="Track referred care from acceptance through the completed specialist visit." action={<button className="btn btn-primary" onClick={() => setCreateOpen(true)}><Plus size={16} /> Create referral</button>} />
-    <div className="list-overview"><div><b>{query.data?.length ?? "—"}</b><span>Active referrals</span></div><div><b>{query.data?.filter((item) => item.status === "Pending").length ?? "—"}</b><span>Awaiting acceptance</span></div><div><b>{query.data?.filter((item) => item.status === "Scheduled").length ?? "—"}</b><span>Visit scheduled</span></div><div><b>6.2 days</b><span>Average time to visit</span></div></div>
+    <div className="list-overview"><div><b>{query.data?.filter(item => ["Pending", "Accepted", "Scheduled"].includes(item.status)).length ?? "—"}</b><span>Active referrals</span></div><div><b>{query.data?.filter((item) => item.status === "Pending").length ?? "—"}</b><span>Awaiting acceptance</span></div><div><b>{query.data?.filter((item) => item.status === "Scheduled").length ?? "—"}</b><span>Visit scheduled</span></div><div><b>6.2 days</b><span>Average time to visit</span></div></div>
     <Card className="table-card list-page-card"><div className="list-toolbar"><div className="toolbar-heading"><h2>Referral tracking</h2><p>Ensure patients connect with the care they need</p></div><label className="filter-select"><Filter size={15} /><select value={filter} onChange={(e) => setFilter(e.target.value)}><option>All referrals</option><option>Pending</option><option>Accepted</option><option>Scheduled</option></select><ChevronDown size={14} /></label></div>
-      {query.isLoading ? <LoadingState /> : query.error ? <ErrorState error={(query.error as Error).message} onRetry={() => void query.refetch()} /> : <div className="table-scroll"><table className="data-table"><thead><tr><th>REFERRAL</th><th>PATIENT</th><th>SPECIALTY</th><th>REFERRED TO</th><th>DATE</th><th>STATUS</th><th /></tr></thead><tbody>{rows.map((ref) => <tr key={ref.id}><td><span className="mono-link">{ref.id}</span></td><td><span className="person-cell"><Avatar initials={ref.initials} size="sm" /><span><b>{ref.patient}</b><small>Care coordination</small></span></span></td><td>{ref.specialty}</td><td>{ref.referredTo}</td><td>{ref.date}</td><td><Badge tone={statusTone(ref.status)}><i className="badge-dot" />{ref.status}</Badge></td><td><button className="row-action" aria-label={`Update referral for ${ref.patient}`} onClick={() => setSelectedReferral(ref)}><MoreHorizontal size={17} /></button></td></tr>)}</tbody></table></div>}
+      {query.isLoading ? <LoadingState /> : query.error ? <ErrorState error={(query.error as Error).message} onRetry={() => void query.refetch()} /> : <div className="table-scroll"><table className="data-table"><thead><tr><th>REFERRAL</th><th>PATIENT</th><th>SPECIALTY</th><th>REFERRED TO</th><th>DATE</th><th>STATUS</th><th /></tr></thead><tbody>{rows.map((ref) => <tr key={ref.id}><td><span className="mono-link">{ref.id}</span></td><td><span className="person-cell"><Avatar initials={ref.initials} size="sm" /><span><b>{ref.patient}</b><small>Care coordination</small></span></span></td><td>{ref.specialty}</td><td>{ref.referredTo}</td><td>{ref.date}</td><td><Badge tone={statusTone(ref.status)}><i className="badge-dot" />{ref.status}</Badge></td><td>{(isDemoMode || user?.role !== "worker") && <button className="row-action" aria-label={`Update referral for ${ref.patient}`} onClick={() => setSelectedReferral(ref)}><MoreHorizontal size={17} /></button>}</td></tr>)}</tbody></table></div>}
       <div className="table-pagination"><span>Showing <b>{rows.length}</b> referrals</span><div><button disabled><ChevronLeft size={15} /></button><button className="page-number active">1</button><button disabled><ChevronRight size={15} /></button></div></div>
     </Card><div className="referral-note"><span className="section-icon purple"><FileHeart size={17} /></span><div><b>Referral follow-through matters</b><p>A referral is complete only after the appointment outcome or specialist care plan is documented.</p></div><button className="inline-link" onClick={() => setGuidanceOpen(true)}>View guidance <ArrowRight size={14} /></button></div>
     {createOpen && <CreateReferralModal onClose={() => setCreateOpen(false)} onCreated={async () => { await queryClient.invalidateQueries({ queryKey: ["referrals"] }); await refreshPatientCase(queryClient); setCreateOpen(false); setNotice("Referral created and is awaiting specialist acceptance."); }} />}
@@ -894,26 +961,35 @@ function CreateReferralModal({ onClose, onCreated }: { onClose: () => void; onCr
   const { user } = useAuth();
   const patientsQuery = useQuery({ queryKey: ["patients", user?.role], queryFn: () => patientService.list(user?.role) });
   const [patient, setPatient] = useState("");
+  const selected = patientsQuery.data?.find(item => item.id === patient);
+  const [handoffClinicianId, setHandoffClinicianId] = useState("");
   const [specialty, setSpecialty] = useState("");
   const [referredTo, setReferredTo] = useState("");
   const [error, setError] = useState("");
   const mutation = useMutation({ mutationFn: referralService.create, onSuccess: onCreated, onError: (issue) => setError(issue instanceof Error ? issue.message : "Could not create referral.") });
   return <Modal title="Create referral" description="Connect the patient with a specialist and keep the referral outcome in view." onClose={onClose}>
-    <form className="form-stack modal-form" onSubmit={(event) => { event.preventDefault(); if (!patient || !specialty || referredTo.trim().length < 2) { setError("Select a patient and specialty, and enter a destination."); return; } setError(""); mutation.mutate({ patient: patient.split(" · ")[0], patientId: patient.split(" · ")[1], specialty, referredTo: referredTo.trim() }); }}>
-      <Field label="Patient"><select value={patient} onChange={(event) => setPatient(event.target.value)}><option value="">Select a patient</option>{(patientsQuery.data || []).map((p) => <option key={p.id} value={`${p.name} · ${p.id}`}>{p.name} · {p.id}</option>)}</select></Field>
+    <form className="form-stack modal-form" onSubmit={(event) => { event.preventDefault(); if (!selected || !specialty || referredTo.trim().length < 2) { setError("Select a patient and specialty, and enter a destination."); return; } setError(""); mutation.mutate({ patient: selected.name, patientId: selected.id, caseId: selected.caseId, handoffClinicianId: handoffClinicianId || undefined, specialty, referredTo: referredTo.trim() }); }}>
+      <Field label="Patient"><select value={patient} onChange={(event) => setPatient(event.target.value)}><option value="">Select a patient</option>{(patientsQuery.data || []).filter(p => isDemoMode || (p.caseId && p.status !== "Closed")).map((p) => <option key={p.id} value={p.id}>{p.name} · {p.id}</option>)}</select></Field>
       <Field label="Specialty"><select value={specialty} onChange={(event) => setSpecialty(event.target.value)}><option value="">Select specialty</option><option>Breast imaging</option><option>Gastroenterology</option><option>Gynecology</option><option>Pulmonology</option><option>Oncology</option></select></Field>
       <Field label="Referred to"><input value={referredTo} onChange={(event) => setReferredTo(event.target.value)} placeholder="Specialist or care center" /></Field>
+      {!isDemoMode && <Field label="Receiving clinician"><select value={handoffClinicianId} onChange={event => setHandoffClinicianId(event.target.value)}>
+        <option value="">Select a clinician (optional)</option>{Object.entries(DEMO_CLINICIAN_NAMES).map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+      </select></Field>}
       {error && <div className="form-error">{error}</div>}<div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={mutation.isPending}>{mutation.isPending ? "Creating…" : "Create referral"} <ArrowRight size={15} /></button></div>
     </form>
   </Modal>;
 }
 
 function ReferralStatusModal({ referral, onClose, onSaved }: { referral: Referral; onClose: () => void; onSaved: () => Promise<void> }) {
-  const [status, setStatus] = useState<Referral["status"]>(referral.status);
+  const [status, setStatus] = useState<Referral["status"]>(!isDemoMode && referral.status === "Scheduled" ? "Accepted" : referral.status);
   const [error, setError] = useState("");
   const mutation = useMutation({ mutationFn: () => referralService.updateStatus(referral.id, status), onSuccess: onSaved, onError: (issue) => setError(issue instanceof Error ? issue.message : "Could not update referral.") });
   return <Modal title="Update referral" description={`${referral.patient} · ${referral.specialty} · ${referral.referredTo}`} onClose={onClose}>
-    <div className="form-stack modal-form"><Field label="Referral progress"><select value={status} onChange={(event) => setStatus(event.target.value as Referral["status"])}><option>Pending</option><option>Accepted</option>{isDemoMode ? <option>Scheduled</option> : <><option>Completed</option><option>Rejected</option><option>Cancelled</option></>}</select></Field><div className="request-info"><FileHeart size={15} /><span>Record specialist acceptance or scheduling. The referral remains active until the visit outcome is documented.</span></div>{error && <div className="form-error">{error}</div>}<div className="modal-actions"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={mutation.isPending}>{mutation.isPending ? "Saving…" : "Update referral"} <Check size={15} /></button></div></div>
+    <form className="form-stack modal-form" onSubmit={event => {
+      event.preventDefault();
+      setError("");
+      mutation.mutate();
+    }}><Field label="Referral progress"><select value={status} onChange={(event) => setStatus(event.target.value as Referral["status"])}><option>Pending</option><option>Accepted</option>{isDemoMode ? <option>Scheduled</option> : <><option>Completed</option><option>Rejected</option><option>Cancelled</option></>}</select></Field><div className="request-info"><FileHeart size={15} /><span>Record specialist acceptance or scheduling. The referral remains active until the visit outcome is documented.</span></div>{error && <div className="form-error">{error}</div>}<div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={mutation.isPending}>{mutation.isPending ? "Saving…" : "Update referral"} <Check size={15} /></button></div></form>
   </Modal>;
 }
 
@@ -927,13 +1003,13 @@ function NotificationsPage() {
   const unreadMutation = useMutation({ mutationFn: (id: number | string) => notificationService.setRead(id, false), onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["notifications"] }); setNotice("Notification marked as unread."); }, onError: (issue) => setNotice(issue instanceof Error ? issue.message : "Could not update notification.") });
   const markAllMutation = useMutation({ mutationFn: () => notificationService.markAllRead(user?.role, user?.patientId), onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["notifications"] }); setNotice("All notifications marked as read."); }, onError: (issue) => setNotice(issue instanceof Error ? issue.message : "Could not update notifications.") });
   const acknowledgeMutation = useMutation({
-    mutationFn: ({ caseId, patientId }: { caseId: string; patientId: string }) => caseService.acknowledge(caseId, patientId),
+    mutationFn: ({ caseId, patientId, notificationId }: { caseId: string; patientId: string; notificationId: number | string }) => caseService.acknowledge(caseId, patientId, notificationId),
     onSuccess: async (_, variables) => { await queryClient.invalidateQueries({ queryKey: ["notifications"] }); await queryClient.invalidateQueries({ queryKey: ["case-timeline", variables.caseId] }); setNotice("Care update acknowledged and added to your case history."); },
     onError: (issue) => setNotice(issue instanceof Error ? issue.message : "Could not acknowledge this care update."),
   });
   return <div className="page-stack"><PageHeader eyebrow="UPDATES & REMINDERS" title="Notifications" description="Stay informed about care milestones and follow-ups that need attention." action={<button className="btn btn-secondary" disabled={markAllMutation.isPending} onClick={() => markAllMutation.mutate()}><CheckCheck size={15} /> Mark all as read</button>} />
     <Card className="notifications-card"><div className="notifications-toolbar"><div><h2>Recent updates</h2><p>{items.filter((item) => item.unread).length} unread notifications</p></div><button className="select-button" onClick={() => { void queryClient.invalidateQueries({ queryKey: ["notifications"] }); setNotice("Notifications refreshed."); }}>Refresh <Activity size={14} /></button></div>
-      {query.isLoading ? <LoadingState /> : query.error ? <ErrorState error={(query.error as Error).message} onRetry={() => void query.refetch()} /> : items.length ? <div className="notification-list">{items.map((item) => <article className={`notification-item ${item.unread ? "unread" : ""}`} key={item.id}><span className={`notification-icon ${item.tone}`}><Bell size={17} /></span><div className="notification-copy"><div><b>{item.title}</b>{item.unread && <i />}</div><p>{item.description}</p><small>{item.createdAt ? formatDateTime(item.createdAt) : item.time}</small>{user?.role === "patient" && <div className="notification-case-link"><Link to="/my-case">View case details <ArrowRight size={13} /></Link>{item.acknowledgedAt && <span>Acknowledged {formatDateTime(item.acknowledgedAt)}</span>}</div>}</div>{user?.role === "patient" && item.caseId && item.patientId ? <button className="btn btn-secondary btn-sm notification-ack" disabled={Boolean(item.acknowledgedAt) || acknowledgeMutation.isPending} onClick={() => acknowledgeMutation.mutate({ caseId: item.caseId!, patientId: item.patientId! })}>{item.acknowledgedAt ? "Acknowledged" : acknowledgeMutation.isPending ? "Saving…" : "Acknowledge"}</button> : <button className="icon-btn notification-action" title={item.unread ? "Mark as read" : "Mark as unread"} onClick={() => item.unread ? markMutation.mutate(item.id) : unreadMutation.mutate(item.id)}>{item.unread ? <Check size={16} /> : <MoreHorizontal size={17} />}</button>}</article>)}</div> : <EmptyState title="You’re all caught up" description="New patient and care-team updates will appear here." />}
+      {query.isLoading ? <LoadingState /> : query.error ? <ErrorState error={(query.error as Error).message} onRetry={() => void query.refetch()} /> : items.length ? <div className="notification-list">{items.map((item) => <article className={`notification-item ${item.unread ? "unread" : ""}`} key={item.id}><span className={`notification-icon ${item.tone}`}><Bell size={17} /></span><div className="notification-copy"><div><b>{item.title}</b>{item.unread && <i />}</div><p>{item.description}</p><small>{item.createdAt ? formatDateTime(item.createdAt) : item.time}</small>{user?.role === "patient" && <div className="notification-case-link">{item.caseId && <Link to={`/my-case/${encodeURIComponent(item.caseId)}`}>View case details <ArrowRight size={13} /></Link>}{item.acknowledgedAt && <span>Acknowledged {formatDateTime(item.acknowledgedAt)}</span>}</div>}</div>{user?.role === "patient" && item.caseId && item.patientId ? <button className="btn btn-secondary btn-sm notification-ack" disabled={Boolean(item.acknowledgedAt) || acknowledgeMutation.isPending} onClick={() => acknowledgeMutation.mutate({ caseId: item.caseId!, patientId: item.patientId!, notificationId: item.id })}>{item.acknowledgedAt ? "Acknowledged" : acknowledgeMutation.isPending ? "Saving…" : "Acknowledge"}</button> : (item.unread || isDemoMode) && <button className="icon-btn notification-action" title={item.unread ? "Mark as read" : "Mark as unread"} onClick={() => item.unread ? markMutation.mutate(item.id) : unreadMutation.mutate(item.id)}>{item.unread ? <Check size={16} /> : <MoreHorizontal size={17} />}</button>}</article>)}</div> : <EmptyState title="You’re all caught up" description="New patient and care-team updates will appear here." />}
     </Card>{notice && <Toast message={notice} onClose={() => setNotice("")} />}
   </div>;
 }

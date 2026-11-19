@@ -41,6 +41,8 @@ export interface Patient {
   dueAt?: string;
   priorityReason?: string;
   screeningDate?: string;
+  screeningStatus?: Screening["status"];
+  registeredAt?: string;
   reviewState?: string;
   closureRecord?: {
     outcome: string;
@@ -65,6 +67,7 @@ export interface CaseTimelineEvent {
 
 export interface Appointment {
   id: string;
+  scheduledAt?: string;
   patient: string;
   patientId?: string;
   initials: string;
@@ -77,6 +80,7 @@ export interface Appointment {
 
 export interface Referral {
   id: string;
+  caseId?: string;
   patient: string;
   patientId?: string;
   initials: string;

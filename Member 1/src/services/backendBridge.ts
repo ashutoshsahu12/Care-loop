@@ -11,7 +11,7 @@ export interface BackendCase {
 }
 export interface BackendPatient {
   id: string; patientReference: string; name: string; dateOfBirth?: string;
-  gender?: string | null; phone?: string | null; email?: string | null; address?: string | null;
+  gender?: string | null; phone?: string | null; email?: string | null; address?: string | null; createdAt?: string;
 }
 export interface BackendScreening {
   id: string; screeningType: string; resultValue: string; createdAt: string;
@@ -30,7 +30,7 @@ export interface BackendTask {
 }
 export interface BackendEvent {
   id: string; caseId: string; eventType: string; summary: string; actorId: string;
-  actorRole: string; createdAt: string;
+  actorRole: string; createdAt: string; metadata?: Record<string, unknown> | null;
 }
 export interface BackendCaseDetail {
   caseRecord: BackendCase; patient: BackendPatient;
@@ -48,6 +48,10 @@ export interface BackendPatientSummary {
 
 export const BACKEND_DEMO_PATIENT_REF = "CL-P-1001";
 export const BACKEND_DEMO_PATIENT_ID = "pat-1001";
+export const DEMO_CLINICIAN_NAMES: Record<string, string> = {
+  "usr-clin-1": "Dr. Neha Verma",
+  "usr-clin-2": "Dr. Rajesh Gupta",
+};
 
 export function displayStatus(status: string): CaseStatus {
   const map: Record<string, CaseStatus> = {
@@ -86,7 +90,7 @@ export function toUnscreenedPatient(patient: BackendPatient): Patient {
     screening: "Not yet screened", result: "Awaiting screening",
     status: "In progress", priority: "Routine", doctor: "Unassigned",
     coordinator: "Unassigned", lastActivity: "New registration",
-    nextAction: "Record screening",
+    nextAction: "Record screening", registeredAt: patient.createdAt,
   };
 }
 export async function getAllBackendPatients(): Promise<BackendPatient[]> {
@@ -106,10 +110,20 @@ export function toPatient(detail: BackendCaseDetail): Patient {
     email: patient.email ?? "", location: patient.address ?? "Care network",
     screening: s?.screeningType ?? "Screening", result: s?.resultValue ?? "Awaiting review",
     status: displayStatus(c.status), priority: displayPriority(c.priority),
-    doctor: "Care team", coordinator: c.assignedCareWorkerName || "Unassigned",
+    doctor: DEMO_CLINICIAN_NAMES[detail.referrals.find(referral => referral.handoffClinicianId)?.handoffClinicianId ?? s?.submittedById ?? ""] ?? "Care team", coordinator: c.assignedCareWorkerName || "Unassigned",
     lastActivity: dateLabel(c.lastActivityAt), nextAction: c.nextAction,
-    caseId: c.id, dueAt: c.dueAt, screeningDate: dateLabel(s?.createdAt),
+    caseId: c.id, dueAt: c.dueAt, screeningDate: s?.createdAt,
+    screeningStatus: toScreening(detail)?.status, reviewState: s?.status.replace(/_/g, " "), registeredAt: patient.createdAt,
     priorityReason: "Priority assigned by the care-coordination workflow.",
+    clinicalNotes: detail.timeline.filter(event => event.eventType === "clinical_review").map(event => ({
+      id: event.id, text: event.summary, createdAt: dateLabel(event.createdAt),
+      author: DEMO_CLINICIAN_NAMES[event.actorId] ?? DEMO_WORKER_NAMES[event.actorId] ?? event.actorId,
+    })),
+    communicationLog: detail.timeline.filter(event => event.eventType === "followup_activity").map(event => ({
+      id: event.id, createdAt: dateLabel(event.createdAt),
+      channel: typeof event.metadata?.channel === "string" ? event.metadata.channel : "Outreach",
+      outcome: typeof event.metadata?.outcome === "string" ? event.metadata.outcome : event.summary,
+    })),
     closureRecord: detail.closureRecord ? {
       outcome: detail.closureRecord.outcome, evidenceNote: detail.closureRecord.evidenceNote,
       verifiedBy: detail.closureRecord.verificationActorId, verifiedAt: detail.closureRecord.verifiedAt,
@@ -138,7 +152,7 @@ export const DEMO_WORKER_NAMES: Record<string, string> = {
 };
 export function toReferral(d: BackendCaseDetail, r: BackendReferral): Referral {
   return {
-    id: r.id, patient: d.patient.name, patientId: d.patient.patientReference,
+    id: r.id, caseId: d.caseRecord.id, patient: d.patient.name, patientId: d.patient.patientReference,
     initials: initials(d.patient.name), specialty: r.specialty, referredTo: r.targetFacility,
     date: dateLabel(r.createdAt),
     status: r.status === "pending_acceptance" ? "Pending"
@@ -151,7 +165,7 @@ export function toReferral(d: BackendCaseDetail, r: BackendReferral): Referral {
 export function toAppointment(d: BackendCaseDetail, a: BackendAppointment): Appointment {
   return {
     id: a.id, patient: d.patient.name, patientId: d.patient.patientReference,
-    initials: initials(d.patient.name), type: a.facility, date: dateLabel(a.scheduledTime),
+    initials: initials(d.patient.name), type: a.facility, scheduledAt: a.scheduledTime, date: dateLabel(a.scheduledTime),
     time: new Date(a.scheduledTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
     clinician: a.providerName,
     status: a.status === "attended" ? "Completed"
@@ -177,7 +191,9 @@ export function toFollowUp(d: BackendCaseDetail, t: BackendTask): FollowUp {
 }
 export function toEvent(e: BackendEvent, patientReference: string): CaseTimelineEvent {
   return { id: e.id, caseId: e.caseId, patientId: patientReference, eventType: e.eventType,
-    description: e.summary, actorName: e.actorId, actorRole: e.actorRole, createdAt: e.createdAt };
+    description: e.eventType === "help_requested" && typeof e.metadata?.message === "string" ? e.metadata.message : e.summary,
+    actorName: DEMO_CLINICIAN_NAMES[e.actorId] ?? DEMO_WORKER_NAMES[e.actorId] ?? e.actorId,
+    actorRole: e.actorRole, createdAt: e.createdAt };
 }
 export async function getCaseDetails(caseId: string): Promise<BackendCaseDetail> {
   return (await api.get<BackendCaseDetail>(`/cases/${encodeURIComponent(caseId)}`)).data;

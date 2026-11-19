@@ -19,7 +19,7 @@ export const ScreeningSubmissionSchema = z.object({
   resultValue: z.string().min(1, "resultValue is required"),
   score: z.number().optional(),
   urgency: UrgencyEnum.optional(),
-  rawPayload: z.record(z.unknown()).optional(),
+  rawPayload: z.record(z.string(), z.unknown()).optional(),
   clinicianNotes: z.string().optional(),
   assignedCareWorkerId: z.string().nullable().optional(),
   assignedCareWorkerName: z.string().nullable().optional(),
