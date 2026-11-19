@@ -64,6 +64,14 @@ export const ReferralStatusUpdateSchema = z.object({
 
 export type ReferralStatusUpdateInput = z.infer<typeof ReferralStatusUpdateSchema>;
 
+export const ReferralHandoffSchema = z.object({
+  targetClinicianId: z.string().min(1, "targetClinicianId is required"),
+  targetFacility: z.string().optional(),
+  handoffNotes: z.string().min(5, "handoffNotes must be at least 5 characters"),
+});
+
+export type ReferralHandoffInput = z.infer<typeof ReferralHandoffSchema>;
+
 export const AppointmentCreateSchema = z.object({
   referralId: z.string().optional(),
   scheduledTime: z.string().refine((val) => !isNaN(Date.parse(val)), {

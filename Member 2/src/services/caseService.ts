@@ -1,6 +1,14 @@
 import type { ID1Database } from "../db/client";
 import type { CareCase, ClosureRecord, Patient, ScreeningResult } from "../types/domain";
-import type { CaseFilters, CaseRecord, CaseStatus, Priority } from "../types/admin";
+import type { AtRiskCase, CaseFilters, CaseRecord, CaseStatus, EscalationRecord, Priority } from "../types/admin";
+import type {
+  PatientAppointmentView,
+  PatientCareJourneyStep,
+  PatientCaseView,
+  PatientNotificationView,
+  PatientPortalSummary,
+  PatientProfile,
+} from "../types/patient";
 import type { User } from "../types/auth";
 import type {
   CaseAssignmentInput,
@@ -12,6 +20,7 @@ import { NotificationService } from "./notificationService";
 import { evaluateScreeningTriage } from "../rules/triageRules";
 import { canTransitionStatus } from "../rules/stateMachine";
 import { validateCaseClosure } from "../rules/closureRules";
+import { detectCaseEscalations } from "../rules/escalationRules";
 
 export class CaseService {
   private db: ID1Database;
@@ -224,9 +233,10 @@ export class CaseService {
         p.patient_reference LIKE ? OR 
         p.name LIKE ? OR 
         c.next_action LIKE ? OR 
-        c.assigned_care_worker_name LIKE ?
+        c.assigned_care_worker_name LIKE ? OR
+        c.status LIKE ?
       )`;
-      params.push(s, s, s, s, s);
+      params.push(s, s, s, s, s, s);
     }
 
     query += " ORDER BY c.created_at DESC";
@@ -240,6 +250,8 @@ export class CaseService {
     patient: Patient;
     screeningResult: ScreeningResult | null;
     closureRecord: ClosureRecord | null;
+    escalations: EscalationRecord[];
+    atRisk: AtRiskCase | null;
   }> {
     const rawCase = await this.db
       .prepare(
@@ -316,11 +328,179 @@ export class CaseService {
       .bind(caseId)
       .first<ClosureRecord>();
 
+    // Evaluate active escalations and follow-up risk for this specific case
+    const refRes = await this.db
+      .prepare("SELECT id, status, created_at as createdAt FROM referrals WHERE case_id = ?")
+      .bind(caseId)
+      .all<{ id: string; status: string; createdAt: string }>();
+
+    const aptRes = await this.db
+      .prepare(
+        "SELECT id, status, scheduled_time as scheduledTime, updated_at as updatedAt FROM appointments WHERE case_id = ? ORDER BY scheduled_time ASC"
+      )
+      .bind(caseId)
+      .all<{ id: string; status: string; scheduledTime: string; updatedAt: string }>();
+
+    const notifRes = await this.db
+      .prepare(
+        "SELECT id, status, created_at as createdAt, acknowledged_at as acknowledgedAt FROM notifications WHERE case_id = ?"
+      )
+      .bind(caseId)
+      .all<{ id: string; status: string; createdAt: string; acknowledgedAt: string | null }>();
+
+    const { escalations, atRisk } = detectCaseEscalations({
+      caseId: rawCase.id,
+      patientReference: rawCase.patientReference,
+      status: rawCase.status,
+      priority: rawCase.priority,
+      assignedCareWorker: rawCase.assignedCareWorkerName,
+      dueAt: rawCase.dueAt,
+      lastActivityAt: rawCase.lastActivityAt,
+      referrals: refRes.results || [],
+      appointments: aptRes.results || [],
+      notifications: notifRes.results || [],
+    });
+
     return {
       caseRecord: rawCase,
       patient,
       screeningResult,
       closureRecord: closureRecord ?? null,
+      escalations,
+      atRisk,
+    };
+  }
+
+  async getPatientPortalSummary(patientIdOrRef: string): Promise<PatientPortalSummary> {
+    const patient = await this.db
+      .prepare(
+        `SELECT id, patient_reference as patientReference, name, date_of_birth as dateOfBirth,
+                gender, phone, email, address
+         FROM patients WHERE id = ? OR patient_reference = ?`
+      )
+      .bind(patientIdOrRef, patientIdOrRef)
+      .first<PatientProfile>();
+
+    if (!patient) {
+      throw new Error(`Patient '${patientIdOrRef}' not found`);
+    }
+
+    // Get latest active case for this patient
+    const caseRow = await this.db
+      .prepare(
+        `SELECT c.id, c.patient_id as patientId, c.status, c.priority,
+                c.assigned_care_worker_name as assignedCareWorker,
+                c.next_action as nextAction, c.due_at as dueAt,
+                s.screening_type as screeningType, s.result_value as resultValue
+         FROM cases c
+         LEFT JOIN screening_results s ON c.screening_result_id = s.id
+         WHERE c.patient_id = ?
+         ORDER BY c.created_at DESC LIMIT 1`
+      )
+      .bind(patient.id)
+      .first<{
+        id: string;
+        patientId: string;
+        status: CaseStatus;
+        priority: Priority;
+        assignedCareWorker: string | null;
+        nextAction: string;
+        dueAt: string;
+        screeningType: string | null;
+        resultValue: string | null;
+      }>();
+
+    let activeCase: PatientCaseView | null = null;
+    if (caseRow) {
+      const statusMap: Record<CaseStatus, string> = {
+        screening: "Screening Under Review",
+        referred: "Specialist Referral Initiated",
+        appointment_scheduled: "Consultation Scheduled",
+        in_care: "Care & Follow-Up in Progress",
+        completed: "Care Completed & Verified",
+        overdue: "Action Required / Needs Follow-up",
+        unassigned: "Care Worker Assignment Pending",
+      };
+
+      const journeySteps: PatientCareJourneyStep[] = [
+        {
+          key: "screening",
+          title: "Screening Completed",
+          description: "Health screening performed and registered in CARELOOP.",
+          completed: true,
+          active: caseRow.status === "screening",
+        },
+        {
+          key: "referred",
+          title: "Specialist Referral",
+          description: "Care team connecting with clinic specialist.",
+          completed: ["referred", "appointment_scheduled", "in_care", "completed"].includes(caseRow.status),
+          active: caseRow.status === "referred",
+        },
+        {
+          key: "appointment",
+          title: "Clinic Consultation",
+          description: "Specialist consultation and clinical diagnostic review.",
+          completed: ["in_care", "completed"].includes(caseRow.status),
+          active: caseRow.status === "appointment_scheduled",
+        },
+        {
+          key: "closure",
+          title: "Verified Loop Closure",
+          description: "Treatment plan established and care verified complete.",
+          completed: caseRow.status === "completed",
+          active: caseRow.status === "in_care",
+        },
+      ];
+
+      activeCase = {
+        id: caseRow.id,
+        patientReference: patient.patientReference,
+        status: caseRow.status,
+        statusDisplay: statusMap[caseRow.status] || caseRow.status,
+        priority: caseRow.priority,
+        screeningType: caseRow.screeningType ?? "General Health Screening",
+        screeningSummary: caseRow.resultValue ? `Screening registered: ${caseRow.resultValue}` : "Routine health screening recorded.",
+        nextStep: caseRow.nextAction,
+        targetDate: caseRow.dueAt,
+        journeySteps,
+        assignedCareWorker: caseRow.assignedCareWorker,
+      };
+    }
+
+    // Get upcoming appointments
+    const aptRes = await this.db
+      .prepare(
+        `SELECT a.id, a.case_id as caseId, a.scheduled_time as scheduledTime,
+                a.facility, a.provider_name as providerName, a.status
+         FROM appointments a
+         JOIN cases c ON a.case_id = c.id
+         WHERE c.patient_id = ?
+         ORDER BY a.scheduled_time ASC`
+      )
+      .bind(patient.id)
+      .all<PatientAppointmentView>();
+
+    // Get notifications
+    const notifRes = await this.db
+      .prepare(
+        `SELECT id, case_id as caseId, type, title, message, status,
+                created_at as createdAt, acknowledged_at as acknowledgedAt
+         FROM notifications
+         WHERE recipient_id = ? 
+            OR recipient_id = ?
+            OR recipient_id IN (SELECT id FROM users WHERE email = ?)
+            OR (case_id IS NOT NULL AND case_id IN (SELECT id FROM cases WHERE patient_id = ?))
+         ORDER BY created_at DESC`
+      )
+      .bind(patient.id, patient.patientReference, patient.email ?? "", patient.id)
+      .all<PatientNotificationView>();
+
+    return {
+      patient,
+      activeCase,
+      upcomingAppointments: aptRes.results || [],
+      unreadNotifications: notifRes.results || [],
     };
   }
 

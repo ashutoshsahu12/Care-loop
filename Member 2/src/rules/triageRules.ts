@@ -44,6 +44,15 @@ export function evaluateScreeningTriage(
     (typeLower.includes("cardio") && score && score >= 180) ||
     (typeLower.includes("retinopathy") && score && score >= 3);
 
+  // Check ambiguous / inconclusive / ungradable findings requiring qualified clinical review
+  const isAmbiguousCondition =
+    resultLower.includes("ambiguous") ||
+    resultLower.includes("inconclusive") ||
+    resultLower.includes("ungradable") ||
+    resultLower.includes("uninterpretable") ||
+    resultLower.includes("inadequate") ||
+    resultLower.includes("indeterminate");
+
   if (isCriticalCondition) {
     priority = "critical";
     urgency = "critical";
@@ -51,6 +60,13 @@ export function evaluateScreeningTriage(
     nextAction = "Urgent clinical review and specialist consultation";
     requiresClinicalReview = true;
     ruleExplanation = "Critical threshold reached: 24h SLA and required clinician consultation";
+  } else if (isAmbiguousCondition) {
+    priority = "high";
+    urgency = "urgent";
+    slaHours = 72; // 72 hours SLA
+    nextAction = "Qualified human clinical review of ambiguous or inconclusive screening result";
+    requiresClinicalReview = true;
+    ruleExplanation = "Ambiguous/inconclusive finding: mandatory routing to qualified human clinician review";
   } else {
     // Check urgent / high risk thresholds
     const isUrgentCondition =

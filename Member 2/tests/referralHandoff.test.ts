@@ -76,4 +76,40 @@ describe("Referrals and Clinician Handoffs", () => {
       .first<{ next_action: string }>();
     expect(caseRow?.next_action).toBe("Schedule consultation with specialist");
   });
+
+  it("executes clinician-to-clinician handoff with structured notes and audit logging", async () => {
+    const req = new Request("http://localhost/api/referrals/ref-1002/handoff", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-user-id": "usr-clin-1",
+      },
+      body: JSON.stringify({
+        targetClinicianId: "usr-clin-2",
+        targetFacility: "Regional Ophthalmology Institute",
+        handoffNotes: "Urgent laser photocoagulation assessment required. Full fundus photos transmitted.",
+      }),
+    });
+
+    const res = await router.handle(req);
+    expect(res.status).toBe(200);
+    const updated = (await res.json()) as any;
+    expect(updated.handoffClinicianId).toBe("usr-clin-2");
+    expect(updated.targetFacility).toBe("Regional Ophthalmology Institute");
+
+    // Case next action updated
+    const caseRow = await db
+      .prepare("SELECT next_action FROM cases WHERE id = 'CL-1002'")
+      .first<{ next_action: string }>();
+    expect(caseRow?.next_action).toContain("Dr. Rajesh Gupta");
+
+    // Case timeline event recorded
+    const event = await db
+      .prepare(
+        "SELECT event_type, summary FROM case_events WHERE case_id = 'CL-1002' AND event_type = 'clinician_handoff' ORDER BY created_at DESC"
+      )
+      .first<any>();
+    expect(event).toBeDefined();
+    expect(event.summary).toContain("Dr. Rajesh Gupta");
+  });
 });

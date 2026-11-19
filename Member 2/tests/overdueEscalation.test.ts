@@ -61,4 +61,17 @@ describe("Due-Date, Overdue Detection & Escalation Engine", () => {
     const atRisk = (await atRiskRes.json()) as any[];
     expect(Array.isArray(atRisk)).toBe(true);
   });
+
+  it("provides case-level escalation and at-risk visibility for single case", async () => {
+    const res = await router.handle(new Request("http://localhost/api/cases/CL-1006/escalations"));
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as any;
+
+    expect(data.caseId).toBe("CL-1006");
+    expect(Array.isArray(data.escalations)).toBe(true);
+    expect(data.escalations.length).toBeGreaterThan(0);
+    expect(data.atRisk).toBeDefined();
+    expect(data.atRisk.caseId).toBe("CL-1006");
+    expect(data.atRisk.reasons).toContain("pending_referral");
+  });
 });

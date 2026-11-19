@@ -157,3 +157,28 @@ CREATE INDEX IF NOT EXISTS idx_referrals_case ON referrals(case_id);
 CREATE INDEX IF NOT EXISTS idx_appointments_case ON appointments(case_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_case ON follow_up_tasks(case_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_case_recipient ON notifications(case_id, recipient_id);
+
+-- Database-Level Immutability Enforcement for Audit Trail & Verified Closure
+CREATE TRIGGER IF NOT EXISTS trg_prevent_case_events_update
+BEFORE UPDATE ON case_events
+BEGIN
+  SELECT RAISE(FAIL, 'case_events is an immutable audit log: updates are strictly prohibited');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_prevent_case_events_delete
+BEFORE DELETE ON case_events
+BEGIN
+  SELECT RAISE(FAIL, 'case_events is an immutable audit log: deletions are strictly prohibited');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_prevent_closure_records_update
+BEFORE UPDATE ON closure_records
+BEGIN
+  SELECT RAISE(FAIL, 'closure_records are immutable: updates are strictly prohibited');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_prevent_closure_records_delete
+BEFORE DELETE ON closure_records
+BEGIN
+  SELECT RAISE(FAIL, 'closure_records are immutable: deletions are strictly prohibited');
+END;

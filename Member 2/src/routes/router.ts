@@ -18,6 +18,7 @@ import {
   FollowUpTaskUpdateSchema,
   NotificationAcknowledgeSchema,
   ReferralCreateSchema,
+  ReferralHandoffSchema,
   ReferralStatusUpdateSchema,
   ScreeningSubmissionSchema,
   VerifiedClosureSchema,
@@ -211,6 +212,18 @@ export class AppRouter {
         return jsonResponse(events);
       }
 
+      // GET /api/cases/:id/escalations
+      const caseEscMatch = path.match(/^\/api\/cases\/([^/]+)\/escalations$/);
+      if (method === "GET" && caseEscMatch) {
+        const caseId = caseEscMatch[1];
+        const details = await this.caseService.getCaseDetails(caseId);
+        return jsonResponse({
+          caseId,
+          escalations: details.escalations,
+          atRisk: details.atRisk,
+        });
+      }
+
       // POST /api/cases/:id/referrals
       const refCreateMatch = path.match(/^\/api\/cases\/([^/]+)\/referrals$/);
       if (method === "POST" && refCreateMatch) {
@@ -237,6 +250,17 @@ export class AppRouter {
         const body = await request.json();
         const input = ReferralStatusUpdateSchema.parse(body);
         const updated = await this.referralService.updateReferralStatus(referralId, input, user);
+        return jsonResponse(updated);
+      }
+
+      // POST /api/referrals/:id/handoff - Clinician-to-clinician handoff
+      const refHandoffMatch = path.match(/^\/api\/referrals\/([^/]+)\/handoff$/);
+      if (method === "POST" && refHandoffMatch) {
+        this.authService.checkPermission(user, ["admin", "clinician"]);
+        const referralId = refHandoffMatch[1];
+        const body = await request.json();
+        const input = ReferralHandoffSchema.parse(body);
+        const updated = await this.referralService.handoffReferral(referralId, input, user);
         return jsonResponse(updated);
       }
 
@@ -319,6 +343,38 @@ export class AppRouter {
         const caseId = notifCaseMatch[1];
         const notifs = await this.notificationService.getNotificationsByCase(caseId);
         return jsonResponse(notifs);
+      }
+
+      // --- Member 1 Patient Portal Endpoints ---
+
+      // GET /api/patient/summary or GET /api/patient/:id/summary
+      const patientSummaryMatch = path.match(/^\/api\/patient\/(?:([^/]+)\/)?summary$/);
+      if (method === "GET" && patientSummaryMatch) {
+        const explicitId = patientSummaryMatch[1] ?? url.searchParams.get("patientId");
+        const patientTarget = explicitId || (user.role === "patient" ? user.id : "pat-1001");
+        const summary = await this.caseService.getPatientPortalSummary(patientTarget);
+        return jsonResponse(summary);
+      }
+
+      // GET /api/patient/profile
+      if (method === "GET" && path === "/api/patient/profile") {
+        const patientTarget = url.searchParams.get("patientId") || (user.role === "patient" ? user.id : "pat-1001");
+        const summary = await this.caseService.getPatientPortalSummary(patientTarget);
+        return jsonResponse(summary.patient);
+      }
+
+      // GET /api/patient/appointments
+      if (method === "GET" && path === "/api/patient/appointments") {
+        const patientTarget = url.searchParams.get("patientId") || (user.role === "patient" ? user.id : "pat-1001");
+        const summary = await this.caseService.getPatientPortalSummary(patientTarget);
+        return jsonResponse(summary.upcomingAppointments);
+      }
+
+      // GET /api/patient/notifications
+      if (method === "GET" && path === "/api/patient/notifications") {
+        const patientTarget = url.searchParams.get("patientId") || (user.role === "patient" ? user.id : "pat-1001");
+        const summary = await this.caseService.getPatientPortalSummary(patientTarget);
+        return jsonResponse(summary.unreadNotifications);
       }
 
       // Health check endpoint

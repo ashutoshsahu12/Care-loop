@@ -186,6 +186,97 @@ export class ReferralService {
     };
   }
 
+  async handoffReferral(
+    referralId: string,
+    input: {
+      targetClinicianId: string;
+      targetFacility?: string;
+      handoffNotes: string;
+    },
+    actor: User
+  ): Promise<Referral> {
+    const now = new Date().toISOString();
+
+    const existing = await this.db
+      .prepare("SELECT * FROM referrals WHERE id = ?")
+      .bind(referralId)
+      .first<{
+        id: string;
+        case_id: string;
+        referring_provider_id: string;
+        target_facility: string;
+        specialty: string;
+        urgency: "routine" | "urgent" | "critical";
+        status: ReferralStatus;
+        notes: string | null;
+        handoff_clinician_id: string | null;
+        handoff_notes: string | null;
+        created_at: string;
+        updated_at: string;
+      }>();
+
+    if (!existing) {
+      throw new Error(`Referral '${referralId}' not found`);
+    }
+
+    const facility = input.targetFacility ?? existing.target_facility;
+
+    await this.db
+      .prepare(
+        `UPDATE referrals
+         SET handoff_clinician_id = ?, handoff_notes = ?, target_facility = ?, updated_at = ?
+         WHERE id = ?`
+      )
+      .bind(input.targetClinicianId, input.handoffNotes, facility, now, referralId)
+      .run();
+
+    const receivingClinician = await this.db
+      .prepare("SELECT name FROM users WHERE id = ?")
+      .bind(input.targetClinicianId)
+      .first<{ name: string }>();
+
+    const clinicianName = receivingClinician?.name ?? input.targetClinicianId;
+    const nextAction = `Clinician handoff to ${clinicianName} at ${facility}`;
+
+    await this.db
+      .prepare(`UPDATE cases SET next_action = ?, last_activity_at = ?, updated_at = ? WHERE id = ?`)
+      .bind(nextAction, now, now, existing.case_id)
+      .run();
+
+    await this.timeline.recordCaseEvent({
+      caseId: existing.case_id,
+      actorId: actor.id,
+      actorRole: actor.role,
+      eventType: "clinician_handoff",
+      summary: `Clinician handoff to ${clinicianName} at ${facility}`,
+      metadata: {
+        referralId,
+        transferringClinicianId: actor.id,
+        transferringClinicianName: actor.name,
+        receivingClinicianId: input.targetClinicianId,
+        receivingClinicianName: clinicianName,
+        facility,
+        handoffNotes: input.handoffNotes,
+      },
+      createdAt: now,
+    });
+
+    return {
+      id: existing.id,
+      caseId: existing.case_id,
+      referringProviderId: existing.referring_provider_id,
+      targetFacility: facility,
+      specialty: existing.specialty,
+      urgency: existing.urgency,
+      status: existing.status,
+      notes: existing.notes,
+      handoffClinicianId: input.targetClinicianId,
+      handoffNotes: input.handoffNotes,
+      createdAt: existing.created_at,
+      updatedAt: now,
+    };
+  }
+
   async getReferralsByCase(caseId: string): Promise<Referral[]> {
     const res = await this.db
       .prepare(

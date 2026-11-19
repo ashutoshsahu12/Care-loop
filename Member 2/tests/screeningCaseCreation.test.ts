@@ -33,6 +33,12 @@ describe("Screening Submission and Case Creation", () => {
     // Low: Normal
     const low = evaluateScreeningTriage("cardiovascular", "Normal: 118/76 mmHg", "routine", 118);
     expect(low.priority).toBe("low");
+
+    // Ambiguous / Inconclusive: Must route to qualified clinical review
+    const ambiguous = evaluateScreeningTriage("cervical_cancer", "Inconclusive / inadequate specimen with atypical cells");
+    expect(ambiguous.priority).toBe("high");
+    expect(ambiguous.requiresClinicalReview).toBe(true);
+    expect(ambiguous.nextAction).toMatch(/Qualified human clinical review/);
   });
 
   it("submits screening result and auto-creates a case with audit events", async () => {

@@ -54,8 +54,9 @@ The task specification's **Cloudflare Workers + TypeScript + Cloudflare D1 (SQLi
 - Records immutable `patient_acknowledged` audit event on the case timeline.
 
 ### 4. Referral Creation & Clinician Handoffs
-- **Endpoints:** `POST /api/cases/:id/referrals`, `GET /api/cases/:id/referrals`, `PATCH /api/referrals/:id`
+- **Endpoints:** `POST /api/cases/:id/referrals`, `GET /api/cases/:id/referrals`, `PATCH /api/referrals/:id`, `POST /api/referrals/:id/handoff`
 - Records destination facility, specialty, urgency, and handoff clinician notes.
+- Dedicated clinician-to-clinician handoff endpoint (`POST /api/referrals/:id/handoff`) logs structured transfer metadata and updates next action.
 - Automatically transitions case status to `referred` and updates `next_action`.
 - Records `referral_created` and `clinician_handoff` immutable audit events.
 
@@ -73,7 +74,7 @@ The task specification's **Cloudflare Workers + TypeScript + Cloudflare D1 (SQLi
 - Completing a task logs `follow_up_task_completed` audit event on the case.
 
 ### 7. Overdue Detection & Rule-Based Escalation Engine
-- **Endpoints:** `GET /api/admin/escalations`, `GET /api/admin/at-risk`
+- **Endpoints:** `GET /api/admin/escalations`, `GET /api/admin/at-risk`, `GET /api/cases/:id/escalations`
 - Detects actionable care gaps:
   - `overdue_referral`: Referrals pending acceptance >= 3 days or case past due date.
   - `missed_appointment`: No-show appointments without subsequent rescheduled visits.
@@ -82,10 +83,12 @@ The task specification's **Cloudflare Workers + TypeScript + Cloudflare D1 (SQLi
   - `unresolved_case`: Cases past target due date (`due_at < NOW()`).
 - Computes Lost-to-Follow-Up risk reasons (`overdue_acknowledgement`, `pending_referral`, `missed_appointment`, `no_recent_follow_up`).
 - Calculates `overdueDays`, `riskLevel`, and deterministic `suggestedNextAction`.
+- Case-specific escalations and risk profiles are exposed on `GET /api/cases/:id/escalations` and inside `GET /api/cases/:id`.
 
-### 8. Immutable Audit Event Chronicle
+### 8. Immutable Audit Event Chronicle & SQLite Database Triggers
 - **Endpoint:** `GET /api/cases/:id/timeline`
 - Append-only `case_events` table tracking actor ID, actor role, event type, status transition, summary, and structured metadata.
+- **Database-Level Enforcement:** SQLite triggers (`trg_prevent_case_events_update`, `trg_prevent_case_events_delete`, `trg_prevent_closure_records_update`, `trg_prevent_closure_records_delete`) physically prevent UPDATE or DELETE mutations on the audit trail and verified closure records.
 - Chronologically ordered audit trail for regulatory and clinical compliance.
 
 ### 9. Verified Case Closure Safety Rules
@@ -97,6 +100,15 @@ The task specification's **Cloudflare Workers + TypeScript + Cloudflare D1 (SQLi
   3. Evidence note of at least 10 non-whitespace characters documenting verification.
   4. Timestamp and verification actor details stored in `closure_records`.
   5. Immutable `verified_closure` case event logged to timeline.
+
+### 10. Patient Portal & Member 1 Integration
+- **Endpoints:** `GET /api/patient/summary`, `GET /api/patient/profile`, `GET /api/patient/appointments`, `GET /api/patient/notifications`
+- Shared TypeScript contracts in `src/types/patient.ts` (`PatientPortalSummary`, `PatientCaseView`, `PatientAppointmentView`, `PatientNotificationView`, `PatientProfile`, `PatientCareJourneyStep`).
+- Presents non-diagnostic, transparent, and reassuring care loop progress:
+  - Screening confirmation without automated diagnoses.
+  - 4-step care journey visual tracker (`screening` -> `referred` -> `appointment` -> `closure`).
+  - Upcoming scheduled clinic appointments with provider and facility details.
+  - Patient notifications with one-click acknowledgement.
 
 ---
 
@@ -161,6 +173,7 @@ Member 2/
 │   │   ├── audit.ts           # Audit events and timeline types
 │   │   ├── auth.ts            # Roles and user context
 │   │   ├── domain.ts          # Core domain models
+│   │   ├── patient.ts         # Shared types for Member 1 Patient UI
 │   │   └── index.ts
 │   ├── db/
 │   │   ├── client.ts          # D1 SQLite client abstraction
@@ -197,8 +210,9 @@ Member 2/
     ├── followUpTasks.test.ts  # Follow-up tasks
     ├── overdueEscalation.test.ts # Overdue & at-risk detection
     ├── verifiedClosure.test.ts # Verified case closure enforcement
-    ├── auditTimeline.test.ts  # Immutable audit events & timeline
+    ├── auditTimeline.test.ts  # Immutable audit events & trigger enforcement
     ├── adminApiContracts.test.ts # Member 3 contract compliance
+    ├── patientPortal.test.ts  # Member 1 Patient UI contracts
     └── edgeCasesAndWorkflows.test.ts # CORS, validation, unassignment
 ```
 
@@ -217,7 +231,7 @@ npm install
 ```
 
 ### 2. Run Test Suite
-To run all 11 test suites (39 tests):
+To run all 12 test suites (47 tests):
 ```bash
 npm test
 ```

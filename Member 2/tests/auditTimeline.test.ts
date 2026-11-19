@@ -74,4 +74,28 @@ describe("Immutable Audit Event Recording & Case Timeline", () => {
     expect(types).toContain("case_assigned");
     expect(types).toContain("appointment_scheduled");
   });
+
+  it("strictly prohibits update or deletion of case_events at database level", async () => {
+    // Attempting to update an existing audit event should fail via SQLite trigger
+    await expect(
+      db.prepare("UPDATE case_events SET summary = 'Tampered summary' WHERE id = 'evt-1001-1'").run()
+    ).rejects.toThrow(/immutable audit log/);
+
+    // Attempting to delete an audit event should fail via SQLite trigger
+    await expect(
+      db.prepare("DELETE FROM case_events WHERE id = 'evt-1001-1'").run()
+    ).rejects.toThrow(/immutable audit log/);
+  });
+
+  it("strictly prohibits update or deletion of closure_records at database level", async () => {
+    // Attempting to update a closure record should fail via SQLite trigger
+    await expect(
+      db.prepare("UPDATE closure_records SET evidence_note = 'Tampered note' WHERE id = 'cls-1005'").run()
+    ).rejects.toThrow(/closure_records are immutable/);
+
+    // Attempting to delete a closure record should fail via SQLite trigger
+    await expect(
+      db.prepare("DELETE FROM closure_records WHERE id = 'cls-1005'").run()
+    ).rejects.toThrow(/closure_records are immutable/);
+  });
 });
