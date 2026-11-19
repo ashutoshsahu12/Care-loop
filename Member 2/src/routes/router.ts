@@ -166,13 +166,6 @@ export class AppRouter {
           search: url.searchParams.get("search") ?? undefined,
         });
         const cases = await this.caseService.getCases(filters);
-        if (user.role === "patient") {
-          const target = await this.resolvePatientTarget(user);
-          const allowed = await this.db.prepare(
-            "SELECT patient_reference as patientReference FROM patients WHERE id = ?"
-          ).bind(target).first<{ patientReference: string }>();
-          return jsonResponse(cases.filter(record => record.patientReference === allowed?.patientReference));
-        }
         return jsonResponse(cases);
       }
 
@@ -216,6 +209,13 @@ export class AppRouter {
           search: url.searchParams.get("search") ?? undefined,
         });
         const cases = await this.caseService.getCases(filters);
+        if (user.role === "patient") {
+          const target = await this.resolvePatientTarget(user);
+          const allowed = await this.db.prepare(
+            "SELECT patient_reference as patientReference FROM patients WHERE id = ?"
+          ).bind(target).first<{ patientReference: string }>();
+          return jsonResponse(cases.filter(record => record.patientReference === allowed?.patientReference));
+        }
         return jsonResponse(cases);
       }
 
