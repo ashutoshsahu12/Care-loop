@@ -144,25 +144,44 @@ export class NodeSqliteDatabase implements ID1Database {
   }
 }
 
+import { SCHEMA_SQL, SEED_SQL } from "./embeddedSql";
+
+function resolveSqlContent(filename: string, fallback: string): string {
+  try {
+    const currentDir = path.dirname(fileURLToPath(import.meta.url));
+    const candidatePaths = [
+      path.join(currentDir, filename),
+      path.join(currentDir, "db", filename),
+      path.join(currentDir, "src", "db", filename),
+      path.join(currentDir, "..", "src", "db", filename),
+      path.join(process.cwd(), filename),
+      path.join(process.cwd(), "src", "db", filename),
+      path.join(process.cwd(), "Member 2", "src", "db", filename),
+    ];
+
+    for (const p of candidatePaths) {
+      if (fs.existsSync(p)) {
+        return fs.readFileSync(p, "utf-8");
+      }
+    }
+  } catch {
+    // Fall back to embedded SQL
+  }
+  return fallback;
+}
+
 /**
  * Creates an in-memory or file-backed database initialized with schema and seed data.
  */
 export function createTestOrLocalDb(options: { seed?: boolean; path?: string } = {}): ID1Database {
   const db = new NodeSqliteDatabase(options.path ?? ":memory:");
-  const currentDir = path.dirname(fileURLToPath(import.meta.url));
 
-  const schemaPath = path.join(currentDir, "schema.sql");
-  if (fs.existsSync(schemaPath)) {
-    const schemaSql = fs.readFileSync(schemaPath, "utf-8");
-    db.exec(schemaSql);
-  }
+  const schemaSql = resolveSqlContent("schema.sql", SCHEMA_SQL);
+  db.exec(schemaSql);
 
   if (options.seed) {
-    const seedPath = path.join(currentDir, "seed.sql");
-    if (fs.existsSync(seedPath)) {
-      const seedSql = fs.readFileSync(seedPath, "utf-8");
-      db.exec(seedSql);
-    }
+    const seedSql = resolveSqlContent("seed.sql", SEED_SQL);
+    db.exec(seedSql);
   }
 
   return db;

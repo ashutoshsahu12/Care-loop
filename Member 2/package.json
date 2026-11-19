@@ -4,10 +4,11 @@
   "description": "CARELOOP Member 2 - Backend & Care Coordination Workflows",
   "type": "module",
   "scripts": {
-    "build": "tsc --noEmit",
+    "dev": "node dist/server.js",
+    "build": "tsc --noEmit && esbuild src/server.ts --bundle --outfile=dist/server.js --format=esm --target=node20 --packages=external && esbuild src/worker.ts --bundle --outfile=dist/worker.js --format=esm --target=node20 --packages=external",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "start": "node dist/worker.js"
+    "start": "node dist/server.js"
   },
   "dependencies": {
     "zod": "^3.23.8"
