@@ -1,0 +1,38 @@
+name: CARELOOP integration checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: 'Member 1/package-lock.json'
+      - run: npm ci
+        working-directory: 'Member 1'
+      - run: npm run build
+        working-directory: 'Member 1'
+      - run: npm test
+        working-directory: 'Member 1'
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: 'Member 2/package-lock.json'
+      - run: npm ci
+        working-directory: 'Member 2'
+      - run: npm run build
+        working-directory: 'Member 2'
+      - run: npm test
+        working-directory: 'Member 2'
