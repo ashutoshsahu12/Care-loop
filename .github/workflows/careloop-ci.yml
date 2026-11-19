@@ -34,5 +34,22 @@ jobs:
         working-directory: 'Member 2'
       - run: npm run build
         working-directory: 'Member 2'
+      - name: Smoke test local backend HTTP server
+        working-directory: 'Member 2'
+        run: |
+          node dist/server.js > /tmp/careloop-http.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=false
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8787/api/health > /tmp/careloop-health.json; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then cat /tmp/careloop-http.log; exit 1; fi
+          grep -q '"status":"healthy"' /tmp/careloop-health.json
+          curl -fsS -H "Authorization: Bearer admin" http://127.0.0.1:8787/api/admin/overview | grep -q '"totalPatients"'
       - run: npm test
         working-directory: 'Member 2'

@@ -55,7 +55,7 @@ export class AnalyticsService {
 
     const totalRefs = Number(refTotal?.count || 0);
     const completedRefs = Number(refCompleted?.count || 0);
-    const referralCompletionRate = totalRefs > 0 ? Number(((completedRefs / totalRefs) * 100).toFixed(1)) : 78.4;
+    const referralCompletionRate = totalRefs > 0 ? Number(((completedRefs / totalRefs) * 100).toFixed(1)) : 0;
 
     // Appointment attendance rate
     const aptAttended = await this.db
@@ -68,7 +68,7 @@ export class AnalyticsService {
     const attendedCount = Number(aptAttended?.count || 0);
     const recordedCount = Number(aptRecorded?.count || 0);
     const appointmentAttendanceRate =
-      recordedCount > 0 ? Number(((attendedCount / recordedCount) * 100).toFixed(1)) : 86.2;
+      recordedCount > 0 ? Number(((attendedCount / recordedCount) * 100).toFixed(1)) : 0;
 
     // Notification acknowledgement rate
     const notifTotal = await this.db
@@ -81,7 +81,7 @@ export class AnalyticsService {
     const totalNotifs = Number(notifTotal?.count || 0);
     const ackNotifs = Number(notifAck?.count || 0);
     const notificationAcknowledgementRate =
-      totalNotifs > 0 ? Number(((ackNotifs / totalNotifs) * 100).toFixed(1)) : 91.7;
+      totalNotifs > 0 ? Number(((ackNotifs / totalNotifs) * 100).toFixed(1)) : 0;
 
     // Verified closure rate
     const totalCasesRow = await this.db
@@ -94,7 +94,7 @@ export class AnalyticsService {
     const totalCases = Number(totalCasesRow?.count || 0);
     const verifiedClosures = Number(verifiedClosuresRow?.count || 0);
     const verifiedClosureRate =
-      totalCases > 0 ? Number(((verifiedClosures / totalCases) * 100).toFixed(1)) : 73.9;
+      totalCases > 0 ? Number(((verifiedClosures / totalCases) * 100).toFixed(1)) : 0;
 
     const completedCasesRow = await this.db
       .prepare("SELECT COUNT(*) as count FROM cases WHERE status = 'completed'")
@@ -102,32 +102,42 @@ export class AnalyticsService {
     const completedCases = Number(completedCasesRow?.count || 0);
     const unresolvedCases = totalCases - completedCases;
 
-    // Default trends matching synthetic timeline
-    const referralCompletionTrend: TimeSeriesPoint[] = [
-      { date: "Nov 11", value: 18 },
-      { date: "Nov 12", value: 22 },
-      { date: "Nov 13", value: 20 },
-      { date: "Nov 14", value: 27 },
-      { date: "Nov 15", value: 25 },
-      { date: "Nov 16", value: 31 },
-      { date: "Nov 17", value: 34 },
-    ];
+    // Calculate consultation turnaround from attended appointments with screening timestamps.
+    const consultationRow = await this.db.prepare(
+      `SELECT AVG((julianday(a.scheduled_time) - julianday(s.created_at)) * 24) as avgHours
+       FROM appointments a
+       JOIN cases c ON a.case_id = c.id
+       JOIN screening_results s ON c.screening_result_id = s.id
+       WHERE a.status = 'attended'
+         AND julianday(a.scheduled_time) >= julianday(s.created_at)`
+    ).first<{ avgHours: number | null }>();
+    const averageTimeToConsultationHours = consultationRow?.avgHours == null
+      ? 0 : Number(Number(consultationRow.avgHours).toFixed(1));
 
-    const appointmentAttendanceTrend: TimeSeriesPoint[] = [
-      { date: "Nov 11", value: 24 },
-      { date: "Nov 12", value: 26 },
-      { date: "Nov 13", value: 23 },
-      { date: "Nov 14", value: 29 },
-      { date: "Nov 15", value: 28 },
-      { date: "Nov 16", value: 33 },
-      { date: "Nov 17", value: 36 },
-    ];
+    // Dataset-backed chart points; no fabricated dates or outcomes.
+    const referralRows = await this.db.prepare(
+      `SELECT substr(updated_at, 1, 10) AS date, COUNT(*) AS value
+       FROM referrals WHERE status = 'completed'
+       GROUP BY substr(updated_at, 1, 10) ORDER BY date DESC LIMIT 7`
+    ).all<TimeSeriesPoint>();
+    const attendanceRows = await this.db.prepare(
+      `SELECT substr(COALESCE(recorded_at, updated_at), 1, 10) AS date, COUNT(*) AS value
+       FROM appointments WHERE status = 'attended'
+       GROUP BY substr(COALESCE(recorded_at, updated_at), 1, 10)
+       ORDER BY date DESC LIMIT 7`
+    ).all<TimeSeriesPoint>();
+    const referralCompletionTrend: TimeSeriesPoint[] = (referralRows.results || []).map(
+      point => ({ date: point.date, value: Number(point.value) })
+    ).reverse();
+    const appointmentAttendanceTrend: TimeSeriesPoint[] = (attendanceRows.results || []).map(
+      point => ({ date: point.date, value: Number(point.value) })
+    ).reverse();
 
     return {
       referralCompletionRate,
       appointmentAttendanceRate,
       notificationAcknowledgementRate,
-      averageTimeToConsultationHours: 42.6,
+      averageTimeToConsultationHours,
       verifiedClosureRate,
       unresolvedCases,
       referralCompletionTrend,
