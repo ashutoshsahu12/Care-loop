@@ -43,7 +43,7 @@ export interface BackendPatientSummary {
   patient: BackendPatient;
   activeCase: { id: string; status: string; priority: string; nextStep: string; targetDate: string } | null;
   upcomingAppointments: BackendAppointment[];
-  unreadNotifications: Array<{ id: string; caseId?: string; title: string; message: string; createdAt: string; status: string }>;
+  unreadNotifications: Array<{ id: string; caseId?: string; title: string; message: string; createdAt: string; status: string; acknowledgedAt?: string | null }>;
 }
 
 export const BACKEND_DEMO_PATIENT_REF = "CL-P-1001";
