@@ -15,6 +15,7 @@ import {
 } from "recharts";
 import { appointments as demoAppointments, chartData, distributionData } from "./mocks/data";
 import { appointmentService } from "./services/appointmentService";
+import { api } from "./services/api";
 import { isDemoMode } from "./services/api";
 import { authService, demoUsers } from "./services/authService";
 import { caseService } from "./services/caseService";
@@ -235,11 +236,95 @@ function DashboardPage() {
   const { user } = useAuth();
   const patientsQuery = useQuery({ queryKey: ["patients", user?.role], queryFn: () => patientService.list(user?.role) });
   const followupQuery = useQuery({ queryKey: ["followups", user?.role], queryFn: () => followupService.list(user?.role) });
+  const connectedAppointments = useQuery({
+    queryKey: ["connected-appointments", user?.role],
+    queryFn: () => appointmentService.list(user?.role),
+    enabled: !isDemoMode,
+  });
+  const connectedOverview = useQuery({
+    queryKey: ["connected-admin-overview"],
+    queryFn: async () => (await api.get<{
+      totalPatients: number; totalCases: number; pendingCases: number;
+      completedCases: number; overdueCases: number;
+    }>("/admin/overview")).data,
+    enabled: !isDemoMode && user?.role === "admin",
+  });
   if (patientsQuery.isLoading || followupQuery.isLoading) return <LoadingState />;
   if (patientsQuery.error || followupQuery.error) return <ErrorState error={(patientsQuery.error || followupQuery.error) instanceof Error ? ((patientsQuery.error || followupQuery.error) as Error).message : "Please try again."} onRetry={() => { void patientsQuery.refetch(); void followupQuery.refetch(); }} />;
   const list = patientsQuery.data || [];
   const role = user?.role || "admin";
   const isDoctor = role === "doctor";
+  if (!isDemoMode) {
+    if (connectedAppointments.isLoading || (role === "admin" && connectedOverview.isLoading)) {
+      return <LoadingState />;
+    }
+    const connectedError = connectedAppointments.error || (role === "admin" ? connectedOverview.error : null);
+    if (connectedError) {
+      return <ErrorState error={connectedError instanceof Error ? connectedError.message : "Unable to load the connected dashboard."}
+        onRetry={() => { void connectedAppointments.refetch(); if (role === "admin") void connectedOverview.refetch(); }} />;
+    }
+    const overview = connectedOverview.data;
+    const active = list.filter(patient => patient.status !== "Closed");
+    const overdue = list.filter(patient => patient.status === "Overdue");
+    const completed = list.filter(patient => patient.status === "Closed");
+    const pendingFollowups = (followupQuery.data || []).filter(item => item.status !== "Completed");
+    const appts = (connectedAppointments.data || []).filter(item => item.status !== "Completed" && item.status !== "Missed");
+    const totals = [
+      { label: role === "admin" ? "Registered patients" : "Assigned patients", value: overview?.totalPatients ?? list.length, icon: Users, tone: "blue", note: "From current synthetic records" },
+      { label: "Active cases", value: overview?.pendingCases ?? active.length, icon: Activity, tone: "teal", note: "Cases awaiting verified closure" },
+      { label: "Overdue cases", value: overview?.overdueCases ?? overdue.length, icon: Clock3, tone: "amber", note: "Needs timely care-team action" },
+      { label: "Verified closures", value: overview?.completedCases ?? completed.length, icon: CheckCheck, tone: "green", note: "Cases marked complete" },
+    ];
+    const statuses = [
+      { label: "In progress", count: active.filter(p => p.status === "In progress" || p.status === "Awaiting patient").length },
+      { label: "In care", count: active.filter(p => p.status === "In care").length },
+      { label: "Referred / scheduled", count: active.filter(p => p.status === "Referred" || p.status === "Appointment scheduled").length },
+      { label: "Overdue", count: overdue.length },
+      { label: "Closed", count: completed.length },
+    ];
+    const maxCount = Math.max(1, ...statuses.map(item => item.count));
+    return <div className="page-stack">
+      <PageHeader eyebrow={`${roleLabels[role].toUpperCase()} WORKSPACE · ${new Date().toLocaleDateString("en-US", { dateStyle: "medium" }).toUpperCase()}`}
+        title={`Welcome, ${(user?.name || "care team").split(" ")[0]}`}
+        description="Care coordination updates from the connected synthetic demo database."
+        action={<button className="btn btn-secondary" onClick={() => window.print()}><Download size={15} /> Export report</button>} />
+      <div className="demo-data-banner" role="note">Synthetic demo data · figures below are calculated from the current connected CARELOOP records.</div>
+      <div className="metric-grid">{totals.map(item =>
+        <MetricCard key={item.label} title={item.label} value={String(item.value)} icon={item.icon} tone={item.tone} note={item.note} />)}
+      </div>
+      <div className="dashboard-main-grid">
+        <Card className="chart-card">
+          <div className="card-heading"><div><h2>Current case status</h2><p>Snapshot of your visible patient cases</p></div><Link to={role === "admin" ? "/care-cases" : "/patients"} className="inline-link">View cases <ArrowRight size={14} /></Link></div>
+          <div className="chart-summary"><div><span>Visible patients</span><b>{list.length}</b></div><div><span>Follow-up tasks open</span><b>{pendingFollowups.length}</b></div></div>
+          <div className="space-y-3">{statuses.map(item =>
+            <div key={item.label}>
+              <div className="flex justify-between text-sm"><span>{item.label}</span><b>{item.count}</b></div>
+              <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-teal-500" style={{ width: `${(item.count / maxCount) * 100}%` }} /></div>
+            </div>)}
+          </div>
+        </Card>
+        <Card className="attention-card"><div className="card-heading"><div><h2>Needs attention</h2><p>Cases with a pending next action</p></div><Link to="/patients" className="inline-link">View all <ArrowRight size={14} /></Link></div>
+          <div className="attention-list">{active.slice(0, 4).map(patient =>
+            <Link className="attention-item" key={patient.id} to={`/patient/${patient.id}`}>
+              <Avatar initials={patient.initials} size="sm" /><span className="attention-copy"><b>{patient.name}</b><small>{patient.nextAction}</small></span>
+              <span className="attention-time">{patient.status}</span><ArrowRight size={15} />
+            </Link>)}
+          {active.length === 0 && <EmptyState title="No cases pending" description="All visible cases are completed." />}</div>
+        </Card>
+      </div>
+      <div className="dashboard-bottom-grid">
+        <Card className="table-card"><div className="card-heading"><div><h2>Recent patient activity</h2><p>Current records from the demo backend</p></div><Link to="/patients" className="inline-link">All patients <ArrowRight size={14} /></Link></div>
+          <PatientTable patients={list.slice(0, 5)} compact />
+        </Card>
+        <Card className="appointments-card"><div className="card-heading"><div><h2>Scheduled appointments</h2><p>Appointments from active care records</p></div><Link to="/appointments" className="icon-action"><ArrowRight size={16} /></Link></div>
+          {appts.slice(0, 3).map(appointment => <AppointmentRow key={appointment.id} appointment={appointment} />)}
+          {appts.length === 0 && <EmptyState title="No upcoming appointments" description="New appointments will appear here." />}
+          <Link to="/appointments" className="appointments-footer">View appointments <ArrowRight size={14} /></Link>
+        </Card>
+      </div>
+    </div>;
+  }
+
   const title = `Good morning, ${(user?.name || "care team").split(" ")[0]}`;
   const description = role === "admin" ? "Here’s what’s happening across your care network today." : isDoctor ? "Your care team has a few important updates." : "Here are the patients and follow-ups that need your attention.";
   const metrics = role === "admin"
