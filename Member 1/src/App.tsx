@@ -171,7 +171,7 @@ export default function App() {
             <Route path="/followups" element={<FollowUpsPage />} />
             <Route path="/referrals" element={<ReferralsPage />} />
           </Route>
-          <Route element={<ProtectedRoute allowed={["admin"]} />}><Route path="/dashboard/admin" element={<DashboardPage />} /><Route path="/analytics" element={<AnalyticsPage />} /><Route path="/care-monitoring" element={<CareAdminDashboard />} /><Route path="/care-cases" element={<CaseMonitoring />} /><Route path="/care-escalations" element={<EscalationMonitoring />} /><Route path="/care-at-risk" element={<LostToFollowUp />} /><Route path="/care-outcomes" element={<CareAnalytics />} /></Route>
+          <Route element={<ProtectedRoute allowed={["admin"]} />}><Route path="/dashboard/admin" element={<DashboardPage />} /><Route path="/analytics" element={isDemoMode ? <AnalyticsPage /> : <CareAnalytics />} /><Route path="/care-monitoring" element={<CareAdminDashboard />} /><Route path="/care-cases" element={<CaseMonitoring />} /><Route path="/care-escalations" element={<EscalationMonitoring />} /><Route path="/care-at-risk" element={<LostToFollowUp />} /><Route path="/care-outcomes" element={<CareAnalytics />} /></Route>
           <Route path="/appointments" element={<AppointmentsPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
       </Route></Route>
@@ -521,17 +521,29 @@ function CareTeamPage() {
   const [query, setQuery] = useState("");
   const [inviteOpen, setInviteOpen] = useState(false);
   const [notice, setNotice] = useState("");
-  const filtered = members.filter((member) => `${member.name} ${member.role} ${member.specialty}`.toLowerCase().includes(query.toLowerCase()));
+  const connectedTeam = useQuery({
+    queryKey: ["connected-team"],
+    queryFn: async () => (await api.get<TeamMember[]>("/team")).data,
+    enabled: !isDemoMode,
+  });
+  if (!isDemoMode && connectedTeam.isLoading) return <LoadingState />;
+  if (!isDemoMode && connectedTeam.error) {
+    return <ErrorState error={(connectedTeam.error as Error).message}
+      onRetry={() => void connectedTeam.refetch()} />;
+  }
+  const displayedMembers = isDemoMode ? members : (connectedTeam.data || []);
+  const filtered = displayedMembers.filter((member) => `${member.name} ${member.role} ${member.specialty}`.toLowerCase().includes(query.toLowerCase()));
   return <div className="page-stack">
-    <PageHeader eyebrow="NETWORK ADMINISTRATION" title="Care team" description="Manage physicians and care coordinators across your network." action={<button className="btn btn-primary" onClick={() => setInviteOpen(true)}><Plus size={16} /> Add team member</button>} />
-    <div className="list-overview"><div><b>{members.filter((member) => member.role === "Physician").length}</b><span>Physicians</span></div><div><b>{members.filter((member) => member.role === "Care coordinator").length}</b><span>Care coordinators</span></div><div><b>{members.filter((member) => member.status === "Active").length}</b><span>Active members</span></div><div><b>12</b><span>Care locations</span></div></div>
+    {!isDemoMode && <div className="demo-data-banner" role="note">Directory from seeded demo users. Availability changes and invitations are disabled in connected mode.</div>}
+    <PageHeader eyebrow="NETWORK ADMINISTRATION" title="Care team" description="Review physicians and care coordinators across your network." action={isDemoMode ? <button className="btn btn-primary" onClick={() => setInviteOpen(true)}><Plus size={16} /> Add team member</button> : undefined} />
+    <div className="list-overview"><div><b>{displayedMembers.filter((member) => member.role === "Physician").length}</b><span>Physicians</span></div><div><b>{displayedMembers.filter((member) => member.role === "Care coordinator").length}</b><span>Care coordinators</span></div><div><b>{displayedMembers.filter((member) => member.status === "Active").length}</b><span>Active members</span></div><div><b>{isDemoMode ? 12 : displayedMembers.length}</b><span>{isDemoMode ? "Care locations" : "Team members"}</span></div></div>
     <Card className="table-card list-page-card"><div className="list-toolbar"><div className="search-field"><Search size={16} /><input placeholder="Search care team…" value={query} onChange={(event) => setQuery(event.target.value)} /></div><button className="btn btn-secondary btn-sm" onClick={() => setQuery("")}><SlidersHorizontal size={14} /> Clear</button></div>
-      <div className="table-scroll"><table className="data-table team-table"><thead><tr><th>TEAM MEMBER</th><th>ROLE</th><th>SPECIALTY</th><th>CARE LOCATION</th><th>ASSIGNED PATIENTS</th><th>STATUS</th><th /></tr></thead><tbody>{filtered.map((member) => <tr key={member.id}><td><span className="person-cell"><Avatar initials={member.initials} size="sm" /><span><b>{member.name}</b><small>{member.id}</small></span></span></td><td>{member.role}</td><td>{member.specialty}</td><td>{member.location}</td><td>{member.patients}</td><td><Badge tone={member.status === "Active" ? "green" : "neutral"}><i className="badge-dot" />{member.status}</Badge></td><td><button className="row-action" aria-label={`Toggle availability for ${member.name}`} title="Toggle availability" onClick={() => { setMembers((current) => current.map((item) => item.id === member.id ? { ...item, status: item.status === "Active" ? "On leave" : "Active" } : item)); setNotice(`${member.name} availability updated.`); }}><MoreHorizontal size={17} /></button></td></tr>)}</tbody></table></div>
+      <div className="table-scroll"><table className="data-table team-table"><thead><tr><th>TEAM MEMBER</th><th>ROLE</th><th>SPECIALTY</th><th>CARE LOCATION</th><th>ASSIGNED PATIENTS</th><th>STATUS</th><th /></tr></thead><tbody>{filtered.map((member) => <tr key={member.id}><td><span className="person-cell"><Avatar initials={member.initials} size="sm" /><span><b>{member.name}</b><small>{member.id}</small></span></span></td><td>{member.role}</td><td>{member.specialty}</td><td>{member.location}</td><td>{member.patients}</td><td><Badge tone={member.status === "Active" ? "green" : "neutral"}><i className="badge-dot" />{member.status}</Badge></td><td>{isDemoMode ? <button className="row-action" aria-label={`Toggle availability for ${member.name}`} title="Toggle availability" onClick={() => { setMembers((current) => current.map((item) => item.id === member.id ? { ...item, status: item.status === "Active" ? "On leave" : "Active" } : item)); setNotice(`${member.name} availability updated.`); }}><MoreHorizontal size={17} /></button> : <span className="text-slate-400">—</span>}</td></tr>)}</tbody></table></div>
       {!filtered.length && <EmptyState title="No team members found" description="Try another search." />}
-      <div className="table-pagination"><span>Showing <b>{filtered.length}</b> of <b>{members.length}</b> members</span><div><button disabled><ChevronLeft size={15} /></button><button className="page-number active">1</button><button disabled><ChevronRight size={15} /></button></div></div>
+      <div className="table-pagination"><span>Showing <b>{filtered.length}</b> of <b>{displayedMembers.length}</b> members</span><div><button disabled><ChevronLeft size={15} /></button><button className="page-number active">1</button><button disabled><ChevronRight size={15} /></button></div></div>
     </Card>
     <div className="referral-note"><span className="section-icon teal"><HeartPulse size={17} /></span><div><b>Care ownership keeps patients connected</b><p>Assign a clinician and care coordinator to every abnormal result, with a clear owner for each next step.</p></div><Link className="inline-link" to="/patients">View patients <ArrowRight size={14} /></Link></div>
-    {inviteOpen && <InviteMemberModal onClose={() => setInviteOpen(false)} onCreate={(member) => { teamMembers.unshift(member); setMembers((current) => [member, ...current]); setInviteOpen(false); setNotice(`${member.name} added to the care team.`); }} />}
+    {isDemoMode && inviteOpen && <InviteMemberModal onClose={() => setInviteOpen(false)} onCreate={(member) => { teamMembers.unshift(member); setMembers((current) => [member, ...current]); setInviteOpen(false); setNotice(`${member.name} added to the care team.`); }} />}
     {notice && <Toast message={notice} onClose={() => setNotice("")} />}
   </div>;
 }

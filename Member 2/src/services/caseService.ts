@@ -22,6 +22,13 @@ import { canTransitionStatus } from "../rules/stateMachine";
 import { validateCaseClosure } from "../rules/closureRules";
 import { detectCaseEscalations } from "../rules/escalationRules";
 
+/** Unique synthetic-case identifier, compatible with both Node 22 and Cloudflare Workers.
+ * Keeps readable seeded CL-1001 examples untouched while avoiding four-digit ID collisions.
+ */
+export function createCareCaseId(): string {
+  return `CL-${crypto.randomUUID().replaceAll("-", "").slice(0, 12).toUpperCase()}`;
+}
+
 export class CaseService {
   private db: ID1Database;
   private timeline: TimelineService;
@@ -83,7 +90,7 @@ export class CaseService {
       .run();
 
     // Create case
-    const caseId = `CL-${crypto.randomUUID()}`;
+    const caseId = createCareCaseId();
     const hasOwner = Boolean(input.assignedCareWorkerId);
     const initialStatus: CaseStatus = hasOwner ? "screening" : "unassigned";
 

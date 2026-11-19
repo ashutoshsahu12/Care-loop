@@ -164,6 +164,27 @@ export class AppRouter {
           gender: input.gender, phone: input.phone, email: input.email, address: "Demo care network" }, 201);
       }
 
+      // GET /api/team — read-only directory of seeded demo care team users.
+      if (method === "GET" && path === "/api/team") {
+        this.authService.checkPermission(user, ["admin"]);
+        const result = await this.db.prepare(
+          `SELECT u.id, u.name, u.role,
+                  (SELECT COUNT(DISTINCT c.patient_id) FROM cases c WHERE c.owner_id = u.id) as patients
+           FROM users u WHERE u.role IN ('clinician', 'care_worker')
+           ORDER BY u.role, u.name`
+        ).all<{ id: string; name: string; role: string; patients: number }>();
+        return jsonResponse((result.results || []).map(item => ({
+          id: item.id,
+          name: item.name,
+          initials: item.name.split(/\s+/).filter(Boolean).map(part => part[0]).join("").slice(0, 2).toUpperCase(),
+          role: item.role === "clinician" ? "Physician" : "Care coordinator",
+          specialty: item.role === "clinician" ? "Clinical care" : "Care coordination",
+          location: "CARELOOP Demo Network",
+          patients: Number(item.patients),
+          status: "Active",
+        })));
+      }
+
       // --- Member 3 Admin Endpoints ---
 
       // GET /api/admin/overview
