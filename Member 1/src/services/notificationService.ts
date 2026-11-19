@@ -3,6 +3,18 @@ import { DEMO_PATIENT_ID, notifications } from "../mocks/data";
 import type { CareNotification, Role } from "../types";
 import { BACKEND_DEMO_PATIENT_REF, getAllCaseDetails, getPatientSummary, visibleCaseDetails } from "./backendBridge";
 type BackendNotification = { id: string; caseId?: string | null; title: string; message: string; createdAt: string; status: string; acknowledgedAt?: string | null };
+export function mapConnectedNotification(
+  item: BackendNotification, role?: Role, patientId?: string
+): CareNotification {
+  return {
+    id: item.id, caseId: item.caseId ?? undefined,
+    patientId: role === "patient" ? (patientId || BACKEND_DEMO_PATIENT_REF) : undefined,
+    title: item.title, description: item.message, time: item.createdAt,
+    createdAt: item.createdAt, unread: item.status !== "acknowledged",
+    acknowledgedAt: item.acknowledgedAt, tone: "blue",
+  };
+}
+
 export const notificationService = {
   async list(role?: Role, patientId?: string): Promise<CareNotification[]> {
     if (!isDemoMode) {
@@ -11,14 +23,7 @@ export const notificationService = {
         : (await Promise.all(visibleCaseDetails(await getAllCaseDetails(), role, patientId).map(async detail =>
             (await api.get<BackendNotification[]>(`/cases/${encodeURIComponent(detail.caseRecord.id)}/notifications`)).data
           ))).flat();
-      return raw.map(item => ({
-        id: item.id, caseId: item.caseId ?? undefined,
-        patientId: role === "patient" ? (patientId || BACKEND_DEMO_PATIENT_REF) : undefined,
-        title: item.title,
-        description: item.message, time: item.createdAt, createdAt: item.createdAt,
-        unread: item.status !== "acknowledged",
-        acknowledgedAt: item.acknowledgedAt, tone: "blue",
-      }));
+      return raw.map(item => mapConnectedNotification(item, role, patientId));
     }
     return role === "patient" ? patientId === DEMO_PATIENT_ID ? notifications.filter((item) => item.patientId === patientId) : [] : notifications.filter((item) => !item.patientId);
   },
