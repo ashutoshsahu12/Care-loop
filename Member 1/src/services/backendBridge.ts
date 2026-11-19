@@ -261,6 +261,17 @@ export function latestVisibleCases(
   return [...latest.values()];
 }
 
+/** Registration queue for screening: only records without any case.
+ * Other staff members' existing assigned cases must not leak into the intake list.
+ */
+export function unscreenedRegistrations(
+  registered: BackendPatient[], cases: BackendCaseDetail[]
+): Patient[] {
+  const withCases = new Set(cases.map(detail => detail.patient.patientReference));
+  return registered.filter(patient => !withCases.has(patient.patientReference))
+    .map(toUnscreenedPatient);
+}
+
 export async function findDetailByPatientRef(patientRef: string): Promise<BackendCaseDetail | undefined> {
   const all = await getAllCaseDetails();
   return all.find(item => item.patient.patientReference === patientRef || item.patient.id === patientRef);
