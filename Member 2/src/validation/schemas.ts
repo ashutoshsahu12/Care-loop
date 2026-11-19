@@ -134,3 +134,13 @@ export const CaseFilterQuerySchema = z.object({
 });
 
 export type CaseFilterQueryInput = z.infer<typeof CaseFilterQuerySchema>;
+
+/** Synthetic patient registration for the hackathon demo. */
+export const PatientCreateSchema = z.object({
+  name: z.string().trim().min(2).max(100),
+  age: z.number().int().min(0).max(120),
+  gender: z.string().trim().min(1).max(32),
+  phone: z.string().trim().max(60),
+  email: z.string().trim().email(),
+});
+export type PatientCreateInput = z.infer<typeof PatientCreateSchema>;
