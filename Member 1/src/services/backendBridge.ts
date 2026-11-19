@@ -7,7 +7,7 @@ import type { Appointment, CaseStatus, CaseTimelineEvent, FollowUp, Patient, Pat
 export interface BackendCase {
   id: string; patientId: string; status: string; priority: string; ownerId?: string | null;
   assignedCareWorkerName?: string | null; nextAction: string; dueAt: string;
-  lastActivityAt: string; patientReference?: string; patientName?: string;
+  lastActivityAt: string; createdAt?: string; patientReference?: string; patientName?: string;
 }
 export interface BackendPatient {
   id: string; patientReference: string; name: string; dateOfBirth?: string;
@@ -23,6 +23,7 @@ export interface BackendReferral {
 }
 export interface BackendAppointment {
   id: string; scheduledTime: string; providerName: string; facility: string; status: string;
+  referralId?: string | null;
 }
 export interface BackendTask {
   id: string; title: string; description?: string; dueDate: string; status: string; assignedToId: string;
@@ -128,6 +129,13 @@ export function toScreening(detail: BackendCaseDetail): Screening | null {
     reviewState: s.status.replace(/_/g, " "),
   };
 }
+/** Seeded demo care worker directory. Task ownership is separate from case ownership. */
+export const DEMO_WORKER_NAMES: Record<string, string> = {
+  "usr-cw-1": "A. Sharma",
+  "usr-cw-2": "R. Kumar",
+  "usr-cw-3": "S. Iyer",
+  "usr-cw-4": "M. Das",
+};
 export function toReferral(d: BackendCaseDetail, r: BackendReferral): Referral {
   return {
     id: r.id, patient: d.patient.name, patientId: d.patient.patientReference,
@@ -137,7 +145,7 @@ export function toReferral(d: BackendCaseDetail, r: BackendReferral): Referral {
       : r.status === "completed" ? "Completed"
       : r.status === "rejected" ? "Rejected"
       : r.status === "cancelled" ? "Cancelled"
-      : d.appointments.some(apt => apt.status === "scheduled" && apt.id.length > 0) ? "Scheduled" : "Accepted",
+      : d.appointments.some(apt => apt.referralId === r.id && apt.status === "scheduled") ? "Scheduled" : "Accepted",
   };
 }
 export function toAppointment(d: BackendCaseDetail, a: BackendAppointment): Appointment {
@@ -146,16 +154,25 @@ export function toAppointment(d: BackendCaseDetail, a: BackendAppointment): Appo
     initials: initials(d.patient.name), type: a.facility, date: dateLabel(a.scheduledTime),
     time: new Date(a.scheduledTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
     clinician: a.providerName,
-    status: a.status === "attended" ? "Completed" : a.status === "no_show" ? "Missed" : "Confirmed",
+    status: a.status === "attended" ? "Completed"
+      : a.status === "no_show" ? "Missed"
+      : a.status === "cancelled" ? "Cancelled"
+      : a.status === "rescheduled" ? "Rescheduled"
+      : "Confirmed",
   };
 }
 export function toFollowUp(d: BackendCaseDetail, t: BackendTask): FollowUp {
-  const due = new Date(t.dueDate).getTime();
+  const dueDate = t.dueDate.slice(0, 10);
+  const localToday = new Date();
+  const today = `${localToday.getFullYear()}-${String(localToday.getMonth() + 1).padStart(2, "0")}-${String(localToday.getDate()).padStart(2, "0")}`;
   return {
     id: t.id, patient: d.patient.name, patientId: d.patient.patientReference,
     initials: initials(d.patient.name), reason: t.title, due: dateLabel(t.dueDate),
-    owner: d.caseRecord.assignedCareWorkerName ?? t.assignedToId,
-    status: t.status === "completed" ? "Completed" : due < Date.now() ? "Overdue" : "Upcoming",
+    owner: DEMO_WORKER_NAMES[t.assignedToId] ?? t.assignedToId,
+    status: t.status === "completed" ? "Completed"
+      : t.status === "cancelled" ? "Cancelled"
+      : dueDate < today ? "Overdue"
+      : dueDate === today ? "Due today" : "Upcoming",
   };
 }
 export function toEvent(e: BackendEvent, patientReference: string): CaseTimelineEvent {
