@@ -4,6 +4,7 @@
  */
 interface ImportMetaEnv {
   readonly VITE_CARELOOP_API_URL?: string;
+  readonly VITE_API_BASE_URL?: string;
   readonly VITE_CARELOOP_USE_DEMO_DATA?: string;
 }
 
