@@ -21,7 +21,13 @@ While early project notes mentioned self-hosted n8n and Supabase/Postgres, the c
 
 ```text
 Care-loop/
-├── README.md                  # Project overview & architecture
+├── README.md                  # Shared project overview and setup
+├── .gitignore                 # Shared repository ignore rules
+├── Member 1/                  # Patient portal and frontend application (React + Vite)
+│   ├── package.json           # Frontend dependencies, build and test scripts
+│   ├── index.html             # Vite HTML entry point
+│   ├── vite.config.ts         # Frontend build configuration
+│   └── src/                   # Pages, components, services, tests and demo data
 ├── Member 2/                  # Backend & Care Coordination Engine (Cloudflare Workers + D1)
 │   ├── README.md              # Backend documentation & API contracts
 │   ├── package.json           # Backend dependencies and test scripts
@@ -37,7 +43,16 @@ Care-loop/
 
 ## Quick Start
 
-### 1. Backend & Care Coordination Workflows (Member 2)
+### 1. Frontend application (Member 1)
+```bash
+cd "Member 1"
+npm ci
+npm run build
+npm test
+npm run dev
+```
+
+### 2. Backend & Care Coordination Workflows (Member 2)
 ```bash
 cd "Member 2"
 npm install
@@ -46,7 +61,7 @@ npm run build       # Verify TypeScript compilation and bundle
 npm run dev         # Or 'npx wrangler dev' to run locally on http://localhost:8787
 ```
 
-### 2. Admin Workspace (Member 3)
+### 3. Admin Workspace (Member 3)
 Member 3 is a feature module designed to be embedded in a host React + Vite application. It provides synthetic demo mode by default and connects to the Member 2 backend when configured:
 ```env
 VITE_CARELOOP_USE_DEMO_DATA=false
@@ -71,7 +86,8 @@ CARELOOP is a responsive React, Vite, and TypeScript prototype for coordinating 
 ## Run locally
 
 ```powershell
-npm install
+cd "Member 1"
+npm ci
 npm run dev
 ```
 
@@ -94,7 +110,7 @@ All demo records and dashboard/analytics figures are synthetic and illustrative.
 
 ## API configuration
 
-Copy `.env.example` to `.env.local` and set `VITE_API_BASE_URL` to the backend base URL, for example `http://localhost:8000/api`. The API client adds the access token as a bearer token and reports API errors rather than silently switching to mock responses. The service layer is in `src/services/`; synthetic records and recorded demo case events are in `src/mocks/`.
+Inside `Member 1/`, copy `.env.example` to `.env.local` and set `VITE_API_BASE_URL` to the backend base URL, for example `http://localhost:8000/api`. The API client adds the access token as a bearer token and reports API errors rather than silently switching to mock responses. The frontend service layer is in `Member 1/src/services/`; synthetic records and recorded demo case events are in `Member 1/src/mocks/`.
 
 The patient case service expects `GET /patient/cases`, `GET /cases/:id/timeline`, `POST /cases/:id/acknowledge`, and `POST /cases/:id/help-requests`. Case closure uses `POST /cases/:id/closure` with an outcome and evidence note. These paths must be agreed with and implemented by the API owner; the frontend does not transition production case status or authorize access.
 
