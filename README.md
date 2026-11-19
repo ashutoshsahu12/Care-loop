@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # CARELOOP — Closing the Screening-to-Care Loop
 
 A comprehensive healthcare coordination platform designed to ensure that no patient screening result is lost to follow-up. CARELOOP tracks patients from initial screening through specialist referrals, appointment scheduling, attendance, and verified clinical closure.
@@ -62,8 +61,10 @@ VITE_CARELOOP_API_URL=http://localhost:8787
 2. **Deterministic Triage & Clinical Disclaimers:** Priority and target time-to-care SLA calculations are transparent and deterministic. No automated medical diagnoses or treatment recommendations are made. Ambiguous or urgent results route directly to qualified clinical review.
 3. **Verified Closure Invariant:** Referral creation or appointment attendance alone does not close a case. Verified closure strictly requires an authorized clinician or administrator, documented clinical outcome, and evidence notes.
 4. **Immutable Audit Trails:** Every important state mutation records an append-only event in the case timeline.
-=======
-# CARELOOP frontend
+
+---
+
+## Frontend application setup and demo notes
 
 CARELOOP is a responsive React, Vite, and TypeScript prototype for coordinating a synthetic screening case through notification, patient acknowledgment, referral, appointment, follow-up, clinical review, and verified closure.
 
@@ -117,4 +118,3 @@ The current admin charts are illustrative and are **not computed from the demo p
 | Verified closure rate | Cases with authorized verification ÷ cases eligible for closure. |
 
 Use database/API aggregates for production metrics and make numerator/denominator rules visible. Do not treat the sample figures as operational results.
->>>>>>> 61338a4 (Initial Commit)
