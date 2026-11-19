@@ -2,23 +2,24 @@ import { api, isDemoMode } from "./api";
 import { DEMO_PATIENT_ID, patients } from "../mocks/data";
 import { recordDemoCaseEvent } from "../mocks/caseEvents";
 import type { CaseStatus, Patient, Role } from "../types";
+import { BACKEND_DEMO_PATIENT_REF, backendStatus, findDetailByPatientRef, getAllCaseDetails, getCaseDetails, toPatient } from "./backendBridge";
 
 const delay = () => new Promise((resolve) => window.setTimeout(resolve, 180));
 export const patientService = {
   async list(role?: Role, patientId?: string): Promise<Patient[]> {
     if (!isDemoMode) {
-      if (role === "patient") {
-        const { data } = await api.get<Patient>("/patients/me");
-        return data ? [data] : [];
-      }
-      return (await api.get<Patient[]>(role && role !== "admin" ? "/patients/assigned" : "/patients")).data;
+      const cases = await getAllCaseDetails();
+      return cases.filter(d => role !== "patient" || d.patient.patientReference === (patientId || BACKEND_DEMO_PATIENT_REF)).map(toPatient);
     }
     await delay();
     if (role === "patient") return patientId === DEMO_PATIENT_ID ? patients.filter((patient) => patient.id === patientId) : [];
     return [...patients].filter((patient) => role === "doctor" ? patient.doctor === "Dr. Maya Chen" : role === "worker" ? patient.coordinator === "Jordan Lee" : true);
   },
   async get(id: string, role?: Role, patientId?: string): Promise<Patient | undefined> {
-    if (!isDemoMode) return (await api.get<Patient>(`/patients/${id}`)).data;
+    if (!isDemoMode) {
+      const detail = await findDetailByPatientRef(id);
+      return detail ? toPatient(detail) : undefined;
+    }
     await delay();
     const patient = patients.find((item) => item.id === id);
     if (!patient) return undefined;
@@ -28,12 +29,15 @@ export const patientService = {
     return patient;
   },
   async getMyProfile(userId: string): Promise<Patient | undefined> {
-    if (!isDemoMode) return (await api.get<Patient>("/patients/me")).data;
+    if (!isDemoMode) {
+      const detail = await findDetailByPatientRef(BACKEND_DEMO_PATIENT_REF);
+      return detail ? toPatient(detail) : undefined;
+    }
     await delay();
     return userId === "U-004" ? patients.find((patient) => patient.id === "CL-2048") : undefined;
   },
   async create(payload: Pick<Patient, "name" | "phone" | "email" | "age" | "gender">): Promise<Patient> {
-    if (!isDemoMode) return (await api.post<Patient>("/patients", payload)).data;
+    if (!isDemoMode) throw new Error("New patient registration is available in standalone demo mode. Connected care records must start with a registered synthetic patient.");
     await delay();
     const initials = payload.name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase();
     const created: Patient = { ...payload, id: `CL-${Date.now().toString().slice(-4)}`, initials, location: "San Francisco, CA", screening: "Not yet screened", result: "Awaiting screening", status: "In progress", priority: "Routine", doctor: "Unassigned", coordinator: "Jordan Lee", lastActivity: "Just now", nextAction: "Schedule screening" };
@@ -43,7 +47,10 @@ export const patientService = {
   async closeCase(id: string, caseId: string, confirmationNote: string, verifiedBy: string): Promise<Patient> {
     if (confirmationNote.trim().length < 8) throw new Error("Document the completed follow-up or treatment before closing this case.");
     if (!caseId) throw new Error("A linked case is required before requesting verified closure.");
-    if (!isDemoMode) return (await api.post<Patient>(`/cases/${encodeURIComponent(caseId)}/closure`, { outcome: "Care completion confirmed", evidence_note: confirmationNote })).data;
+    if (!isDemoMode) {
+      await api.post(`/cases/${encodeURIComponent(caseId)}/close`, { outcome: "care_completed", evidenceNote: confirmationNote });
+      return toPatient(await getCaseDetails(caseId));
+    }
     await delay();
     const patient = patients.find((item) => item.id === id);
     if (!patient) throw new Error("Patient record was not found.");
@@ -58,7 +65,12 @@ export const patientService = {
     return patient;
   },
   async addClinicalNote(id: string, text: string, author: string): Promise<Patient> {
-    if (!isDemoMode) return (await api.post<Patient>(`/patients/${id}/notes`, { text })).data;
+    if (!isDemoMode) {
+      const detail = await findDetailByPatientRef(id);
+      if (!detail) throw new Error("Patient not found.");
+      await api.post(`/cases/${encodeURIComponent(detail.caseRecord.id)}/notes`, { text });
+      return toPatient(await getCaseDetails(detail.caseRecord.id));
+    }
     await delay();
     const patient = patients.find((item) => item.id === id);
     if (!patient) throw new Error("Patient record was not found.");
@@ -68,7 +80,12 @@ export const patientService = {
     return patient;
   },
   async updateProgress(id: string, nextAction: string, status: Exclude<CaseStatus, "Closed">): Promise<Patient> {
-    if (!isDemoMode) return (await api.patch<Patient>(`/patients/${id}/progress`, { next_action: nextAction, status })).data;
+    if (!isDemoMode) {
+      const detail = await findDetailByPatientRef(id);
+      if (!detail) throw new Error("Patient not found.");
+      await api.patch(`/cases/${encodeURIComponent(detail.caseRecord.id)}/status`, { targetStatus: backendStatus(status), nextAction });
+      return toPatient(await getCaseDetails(detail.caseRecord.id));
+    }
     await delay();
     const patient = patients.find((item) => item.id === id);
     if (!patient) throw new Error("Patient record was not found.");
@@ -79,7 +96,12 @@ export const patientService = {
     return patient;
   },
   async recordCommunication(id: string, channel: string, outcome: string): Promise<Patient> {
-    if (!isDemoMode) return (await api.post<Patient>(`/patients/${id}/communications`, { channel, outcome })).data;
+    if (!isDemoMode) {
+      const detail = await findDetailByPatientRef(id);
+      if (!detail) throw new Error("Patient not found.");
+      await api.post(`/cases/${encodeURIComponent(detail.caseRecord.id)}/communications`, { channel, outcome });
+      return toPatient(await getCaseDetails(detail.caseRecord.id));
+    }
     await delay();
     const patient = patients.find((item) => item.id === id);
     if (!patient) throw new Error("Patient record was not found.");
@@ -89,7 +111,12 @@ export const patientService = {
     return patient;
   },
   async assignCareTeam(id: string, doctor: string, coordinator: string): Promise<Patient> {
-    if (!isDemoMode) return (await api.patch<Patient>(`/patients/${id}/care-team`, { doctor, coordinator })).data;
+    if (!isDemoMode) {
+      const detail = await findDetailByPatientRef(id);
+      if (!detail) throw new Error("Patient not found.");
+      await api.patch(`/cases/${encodeURIComponent(detail.caseRecord.id)}/assign`, { ownerId: "usr-cw-1", assignedCareWorkerName: coordinator, reason: `Assigned by ${doctor}` });
+      return toPatient(await getCaseDetails(detail.caseRecord.id));
+    }
     await delay();
     const patient = patients.find((item) => item.id === id);
     if (!patient) throw new Error("Patient record was not found.");
