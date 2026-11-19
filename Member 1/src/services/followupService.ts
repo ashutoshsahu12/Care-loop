@@ -2,13 +2,12 @@ import { api, isDemoMode } from "./api";
 import { DEMO_PATIENT_ID, followUps, patients } from "../mocks/data";
 import { recordDemoCaseEvent } from "../mocks/caseEvents";
 import type { FollowUp, Role } from "../types";
-import { BACKEND_DEMO_PATIENT_REF, findDetailByPatientRef, getAllCaseDetails, getCaseDetails, toFollowUp } from "./backendBridge";
+import { BACKEND_DEMO_PATIENT_REF, findDetailByPatientRef, getAllCaseDetails, getCaseDetails, toFollowUp, visibleCaseDetails } from "./backendBridge";
 export const followupService = {
   async list(role?: Role, patientId?: string): Promise<FollowUp[]> {
     if (!isDemoMode) {
       const details = await getAllCaseDetails();
-      return details.filter(d => role !== "patient" || d.patient.patientReference === (patientId || BACKEND_DEMO_PATIENT_REF))
-        .flatMap(d => d.tasks.map(t => toFollowUp(d, t)));
+      return visibleCaseDetails(details, role, patientId).flatMap(d => d.tasks.map(t => toFollowUp(d, t)));
     }
     if (role === "admin" || !role) return followUps;
     if (role === "patient") {
