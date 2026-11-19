@@ -27,7 +27,7 @@ Care-loop/
 │   ├── package.json           # Backend dependencies and test scripts
 │   ├── wrangler.toml          # Cloudflare Workers configuration
 │   ├── src/                   # Database, services, rules, and API router
-│   └── tests/                 # 11 Vitest test suites (39 tests)
+│   └── tests/                 # 12 Vitest test suites (47 tests)
 └── Member 3/                  # Admin, Monitoring & Analytics Workspace (React + Vite)
     ├── README.md              # Frontend module documentation
     └── src/                   # Admin UI components, dashboards, and demo data
@@ -41,9 +41,9 @@ Care-loop/
 ```bash
 cd "Member 2"
 npm install
-npm test            # Run all 11 test suites
-npm run build       # Verify TypeScript compilation
-npx wrangler dev    # Run Cloudflare Worker locally on http://localhost:8787
+npm test            # Run all 12 test suites (47 tests)
+npm run build       # Verify TypeScript compilation and bundle
+npm run dev         # Or 'npx wrangler dev' to run locally on http://localhost:8787
 ```
 
 ### 2. Admin Workspace (Member 3)
