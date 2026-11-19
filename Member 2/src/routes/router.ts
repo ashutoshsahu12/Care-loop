@@ -1,4 +1,5 @@
 import type { ID1Database } from "../db/client";
+import type { User } from "../types/auth";
 import { AuthService } from "../services/authService";
 import { CaseService } from "../services/caseService";
 import { ReferralService } from "../services/referralService";
@@ -77,6 +78,28 @@ export class AppRouter {
     this.analyticsService = new AnalyticsService(db);
   }
 
+  /** Patient-role demo requests may only access cases matching their seeded patient email.
+   * This is ownership scoping, not a substitute for real authentication.
+   */
+  private async ensurePatientCaseAccess(user: User, caseId: string): Promise<void> {
+    if (user.role !== "patient") return;
+    const found = await this.db.prepare(
+      "SELECT c.id FROM cases c JOIN patients p ON c.patient_id = p.id WHERE c.id = ? AND p.email = ?"
+    ).bind(caseId, user.email).first<{ id: string }>();
+    if (!found) throw new Error("Forbidden: This case is not linked to the selected patient.");
+  }
+
+  private async resolvePatientTarget(user: User, requested?: string | null): Promise<string> {
+    if (user.role !== "patient") return requested || "pat-1001";
+    const patient = await this.db.prepare(
+      "SELECT id, patient_reference as patientReference FROM patients WHERE email = ?"
+    ).bind(user.email).first<{ id: string; patientReference: string }>();
+    if (!patient || (requested && requested !== patient.id && requested !== patient.patientReference)) {
+      throw new Error("Forbidden: You can only view your own demo patient profile.");
+    }
+    return patient.id;
+  }
+
   async handle(request: Request): Promise<Response> {
     if (request.method === "OPTIONS") {
       return handleCors();
@@ -102,7 +125,10 @@ export class AppRouter {
       if (method === "GET" && patientMatch) {
         const patient = await this.db.prepare(
           "SELECT id, patient_reference as patientReference, name, date_of_birth as dateOfBirth, gender, phone, email, address FROM patients WHERE id = ? OR patient_reference = ?"
-        ).bind(patientMatch[1], patientMatch[1]).first();
+        ).bind(patientMatch[1], patientMatch[1]).first<{ email: string | null }>();
+        if (patient && user.role === "patient" && patient.email !== user.email) {
+          throw new Error("Forbidden: You can only view your own demo patient profile.");
+        }
         return patient ? jsonResponse(patient) : jsonResponse({ message: "Patient not found" }, 404);
       }
 
@@ -140,6 +166,13 @@ export class AppRouter {
           search: url.searchParams.get("search") ?? undefined,
         });
         const cases = await this.caseService.getCases(filters);
+        if (user.role === "patient") {
+          const target = await this.resolvePatientTarget(user);
+          const allowed = await this.db.prepare(
+            "SELECT patient_reference as patientReference FROM patients WHERE id = ?"
+          ).bind(target).first<{ patientReference: string }>();
+          return jsonResponse(cases.filter(record => record.patientReference === allowed?.patientReference));
+        }
         return jsonResponse(cases);
       }
 
@@ -190,9 +223,13 @@ export class AppRouter {
       const caseMatch = path.match(/^\/api\/cases\/([^/]+)$/);
       if (method === "GET" && caseMatch) {
         const caseId = caseMatch[1];
+        await this.ensurePatientCaseAccess(user, caseId);
         const details = await this.caseService.getCaseDetails(caseId);
+        await this.ensurePatientCaseAccess(user, caseId);
         const referrals = await this.referralService.getReferralsByCase(caseId);
+        await this.ensurePatientCaseAccess(user, caseId);
         const appointments = await this.appointmentService.getAppointmentsByCase(caseId);
+        await this.ensurePatientCaseAccess(user, caseId);
         const tasks = await this.taskService.getTasksByCase(caseId);
         const timeline = await this.timelineService.getCaseTimeline(caseId);
         return jsonResponse({
@@ -251,6 +288,7 @@ export class AppRouter {
         if (message.length < 8 || message.length > 1000) {
           return jsonResponse({ message: "Help request must be 8 to 1000 characters." }, 400);
         }
+        await this.ensurePatientCaseAccess(user, helpMatch[1]);
         await this.caseService.getCaseDetails(helpMatch[1]);
         const event = await this.timelineService.recordCaseEvent({
           caseId: helpMatch[1], actorId: user.id, actorRole: user.role,
@@ -285,6 +323,7 @@ export class AppRouter {
       const timelineMatch = path.match(/^\/api\/cases\/([^/]+)\/timeline$/);
       if (method === "GET" && timelineMatch) {
         const caseId = timelineMatch[1];
+        await this.ensurePatientCaseAccess(user, caseId);
         const events = await this.timelineService.getCaseTimeline(caseId);
         return jsonResponse(events);
       }
@@ -293,6 +332,7 @@ export class AppRouter {
       const caseEscMatch = path.match(/^\/api\/cases\/([^/]+)\/escalations$/);
       if (method === "GET" && caseEscMatch) {
         const caseId = caseEscMatch[1];
+        await this.ensurePatientCaseAccess(user, caseId);
         const details = await this.caseService.getCaseDetails(caseId);
         return jsonResponse({
           caseId,
@@ -315,6 +355,7 @@ export class AppRouter {
       // GET /api/cases/:id/referrals
       if (method === "GET" && refCreateMatch) {
         const caseId = refCreateMatch[1];
+        await this.ensurePatientCaseAccess(user, caseId);
         const referrals = await this.referralService.getReferralsByCase(caseId);
         return jsonResponse(referrals);
       }
@@ -355,6 +396,7 @@ export class AppRouter {
       // GET /api/cases/:id/appointments
       if (method === "GET" && aptCreateMatch) {
         const caseId = aptCreateMatch[1];
+        await this.ensurePatientCaseAccess(user, caseId);
         const appointments = await this.appointmentService.getAppointmentsByCase(caseId);
         return jsonResponse(appointments);
       }
@@ -393,6 +435,7 @@ export class AppRouter {
       // GET /api/cases/:id/tasks
       if (method === "GET" && taskCreateMatch) {
         const caseId = taskCreateMatch[1];
+        await this.ensurePatientCaseAccess(user, caseId);
         const tasks = await this.taskService.getTasksByCase(caseId);
         return jsonResponse(tasks);
       }
@@ -419,6 +462,14 @@ export class AppRouter {
           // empty body ok
         }
         const input = NotificationAcknowledgeSchema.parse(body);
+        if (user.role === "patient") {
+          const recipient = await this.db.prepare(
+            "SELECT recipient_id as recipientId FROM notifications WHERE id = ?"
+          ).bind(notifId).first<{ recipientId: string }>();
+          if (recipient && recipient.recipientId !== user.id) {
+            throw new Error("Forbidden: This notification is not addressed to you.");
+          }
+        }
         const updated = await this.notificationService.acknowledgeNotification(notifId, user, input.notes);
         return jsonResponse(updated);
       }
@@ -427,6 +478,7 @@ export class AppRouter {
       const notifCaseMatch = path.match(/^\/api\/cases\/([^/]+)\/notifications$/);
       if (method === "GET" && notifCaseMatch) {
         const caseId = notifCaseMatch[1];
+        await this.ensurePatientCaseAccess(user, caseId);
         const notifs = await this.notificationService.getNotificationsByCase(caseId);
         return jsonResponse(notifs);
       }
@@ -437,28 +489,28 @@ export class AppRouter {
       const patientSummaryMatch = path.match(/^\/api\/patient\/(?:([^/]+)\/)?summary$/);
       if (method === "GET" && patientSummaryMatch) {
         const explicitId = patientSummaryMatch[1] ?? url.searchParams.get("patientId");
-        const patientTarget = explicitId || (user.role === "patient" ? user.id : "pat-1001");
+        const patientTarget = await this.resolvePatientTarget(user, explicitId);
         const summary = await this.caseService.getPatientPortalSummary(patientTarget);
         return jsonResponse(summary);
       }
 
       // GET /api/patient/profile
       if (method === "GET" && path === "/api/patient/profile") {
-        const patientTarget = url.searchParams.get("patientId") || (user.role === "patient" ? user.id : "pat-1001");
+        const patientTarget = await this.resolvePatientTarget(user, url.searchParams.get("patientId"));
         const summary = await this.caseService.getPatientPortalSummary(patientTarget);
         return jsonResponse(summary.patient);
       }
 
       // GET /api/patient/appointments
       if (method === "GET" && path === "/api/patient/appointments") {
-        const patientTarget = url.searchParams.get("patientId") || (user.role === "patient" ? user.id : "pat-1001");
+        const patientTarget = await this.resolvePatientTarget(user, url.searchParams.get("patientId"));
         const summary = await this.caseService.getPatientPortalSummary(patientTarget);
         return jsonResponse(summary.upcomingAppointments);
       }
 
       // GET /api/patient/notifications
       if (method === "GET" && path === "/api/patient/notifications") {
-        const patientTarget = url.searchParams.get("patientId") || (user.role === "patient" ? user.id : "pat-1001");
+        const patientTarget = await this.resolvePatientTarget(user, url.searchParams.get("patientId"));
         const summary = await this.caseService.getPatientPortalSummary(patientTarget);
         return jsonResponse(summary.unreadNotifications);
       }
