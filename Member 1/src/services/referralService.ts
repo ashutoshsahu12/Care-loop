@@ -49,7 +49,13 @@ export const referralService = {
   },
   async updateStatus(id: string, status: Referral["status"]): Promise<Referral> {
     if (!isDemoMode) {
-      const statusMap: Record<Referral["status"], string> = { Accepted: "accepted", Pending: "pending_acceptance", Scheduled: "accepted" };
+      if (status === "Scheduled") {
+        throw new Error("To mark a referral as scheduled, book an appointment for its case first.");
+      }
+      const statusMap: Record<Exclude<Referral["status"], "Scheduled">, string> = {
+        Accepted: "accepted", Pending: "pending_acceptance",
+        Completed: "completed", Rejected: "rejected", Cancelled: "cancelled",
+      };
       await api.patch(`/referrals/${encodeURIComponent(id)}`, { status: statusMap[status] });
       const updated = (await getAllCaseDetails()).find(d => d.referrals.some(r => r.id === id));
       if (!updated) throw new Error("Updated referral could not be retrieved.");
