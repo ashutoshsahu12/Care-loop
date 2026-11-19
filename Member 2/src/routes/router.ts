@@ -480,7 +480,7 @@ export class AppRouter {
         const caseId = notifCaseMatch[1];
         await this.ensurePatientCaseAccess(user, caseId);
         const notifs = await this.notificationService.getNotificationsByCase(caseId);
-        return jsonResponse(notifs);
+        return jsonResponse(user.role === "patient" ? notifs.filter(item => item.recipientId === user.id) : notifs);
       }
 
       // --- Member 1 Patient Portal Endpoints ---
