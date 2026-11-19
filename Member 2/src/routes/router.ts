@@ -1,5 +1,6 @@
 import type { ID1Database } from "../db/client";
 import type { User } from "../types/auth";
+import type { Appointment, FollowUpTask, Referral } from "../types/domain";
 import { AuthService } from "../services/authService";
 import { CaseService } from "../services/caseService";
 import { ReferralService } from "../services/referralService";
@@ -51,6 +52,18 @@ function handleCors(): Response {
       "Access-Control-Max-Age": "86400",
     },
   });
+}
+
+function patientReferral({ id, caseId, specialty, targetFacility, createdAt, status }: Referral) {
+  return { id, caseId, specialty, targetFacility, createdAt, status };
+}
+
+function patientAppointment({ id, caseId, referralId, scheduledTime, facility, providerName, status }: Appointment) {
+  return { id, caseId, referralId, scheduledTime, facility, providerName, status };
+}
+
+function patientTask({ id, caseId, title, dueDate, status, assignedToId }: FollowUpTask) {
+  return { id, caseId, title, dueDate, status, assignedToId };
 }
 
 export class AppRouter {
@@ -277,9 +290,9 @@ export class AppRouter {
               id: screening.id, screeningType: screening.screeningType, resultValue: screening.resultValue,
               status: screening.status, createdAt: screening.createdAt,
             } : null,
-            referrals: referrals.map(({ id, specialty, targetFacility, createdAt, status }) => ({ id, specialty, targetFacility, createdAt, status })),
-            appointments: appointments.map(({ id, caseId, referralId, scheduledTime, facility, providerName, status }) => ({ id, caseId, referralId, scheduledTime, facility, providerName, status })),
-            tasks: tasks.map(({ id, title, dueDate, status, assignedToId }) => ({ id, title, dueDate, status, assignedToId })),
+            referrals: referrals.map(patientReferral),
+            appointments: appointments.map(patientAppointment),
+            tasks: tasks.map(patientTask),
             timeline,
           });
         }
@@ -403,7 +416,7 @@ export class AppRouter {
         const caseId = refCreateMatch[1];
         await this.ensurePatientCaseAccess(user, caseId);
         const referrals = await this.referralService.getReferralsByCase(caseId);
-        return jsonResponse(referrals);
+        return jsonResponse(user.role === "patient" ? referrals.map(patientReferral) : referrals);
       }
 
       // PATCH /api/referrals/:id
@@ -444,7 +457,7 @@ export class AppRouter {
         const caseId = aptCreateMatch[1];
         await this.ensurePatientCaseAccess(user, caseId);
         const appointments = await this.appointmentService.getAppointmentsByCase(caseId);
-        return jsonResponse(appointments);
+        return jsonResponse(user.role === "patient" ? appointments.map(patientAppointment) : appointments);
       }
 
       // PATCH /api/appointments/:id — modify an existing appointment, no duplicate rows.
@@ -483,7 +496,7 @@ export class AppRouter {
         const caseId = taskCreateMatch[1];
         await this.ensurePatientCaseAccess(user, caseId);
         const tasks = await this.taskService.getTasksByCase(caseId);
-        return jsonResponse(tasks);
+        return jsonResponse(user.role === "patient" ? tasks.map(patientTask) : tasks);
       }
 
       // PATCH /api/tasks/:id
@@ -582,7 +595,7 @@ export class AppRouter {
         return jsonResponse(
           {
             message: "Validation Error",
-            errors: err.errors.map((e) => ({
+            errors: err.issues.map((e) => ({
               path: e.path.join("."),
               message: e.message,
             })),

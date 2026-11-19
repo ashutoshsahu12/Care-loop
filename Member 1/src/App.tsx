@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { cloneElement, useEffect, useId, useState, type ReactElement } from "react";
 import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -225,8 +225,15 @@ function AuthPage() {
       <div className="auth-switch">Demo identities use synthetic case data and do not create real accounts.</div><div className="auth-security"><ShieldCheck size={14} /> Secure access · Demo environment</div></div></div></div>;
 }
 
-function Field({ label, children, error }: { label: string; children: React.ReactNode; error?: string }) {
-  return <label className="form-field"><span>{label}</span>{children}{error && <small className="field-error">{error}</small>}</label>;
+function Field({ label, children, error }: { label: string; children: ReactElement<{ id?: string; "aria-describedby"?: string; "aria-invalid"?: boolean }>; error?: string }) {
+  const id = useId();
+  const controlId = children.props.id ?? id;
+  const errorId = error ? `${controlId}-error` : undefined;
+  return <div className="form-field">
+    <label htmlFor={controlId}>{label}</label>
+    {cloneElement(children, { id: controlId, "aria-describedby": errorId, "aria-invalid": Boolean(error) })}
+    {error && <small id={errorId} className="field-error">{error}</small>}
+  </div>;
 }
 
 function MetricCard({ title, value, change, icon: Icon, tone, note }: { title: string; value: string; change?: string; icon: typeof Users; tone: string; note: string }) {
