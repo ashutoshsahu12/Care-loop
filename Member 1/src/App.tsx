@@ -18,7 +18,7 @@ import { appointmentService } from "./services/appointmentService";
 import { api } from "./services/api";
 import { demoIdentityStorage, isDemoMode } from "./services/api";
 import { browserDemo } from "./services/demoTransport";
-import { JudgeDemo } from "./judge/JudgeDemo";
+import { CareWalkthrough } from "./demo/CareWalkthrough";
 import { DEMO_CLINICIAN_NAMES, DEMO_WORKER_NAMES } from "./services/backendBridge";
 import { authService, demoUsers } from "./services/authService";
 import { caseService } from "./services/caseService";
@@ -103,7 +103,7 @@ function AppLayout() {
       <div className="brand-row"><Link className="brand" to={roleHome(user.role)}><span className="brand-mark"><HeartPulse size={19} /></span>{!collapsed && <span>careloop<span className="brand-dot">.</span></span>}</Link><button className="collapse-btn" aria-label="Collapse sidebar" onClick={() => setCollapsed(!collapsed)}><ChevronLeft size={17} /></button></div>
       {!collapsed && <div className="workspace-switch"><span className="workspace-icon"><ShieldCheck size={17} /></span><span className="workspace-copy"><strong>{isDemoMode ? "Bayview Health" : "CARELOOP Demo Network"}</strong><small>Care network</small></span><ChevronDown size={14} /></div>}
       <nav className="side-nav">
-        <Link className="nav-link" to="/judge-demo" onClick={() => setMobileOpen(false)} title={collapsed ? "Judge walkthrough" : undefined}><ClipboardCheck size={18} /><span>Judge walkthrough</span></Link>
+        <Link className="nav-link" to="/walkthrough" onClick={() => setMobileOpen(false)} title={collapsed ? "Care walkthrough" : undefined}><ClipboardCheck size={18} /><span>Care walkthrough</span></Link>
         {sections.map((section) => <div className="nav-section" key={section.label}>
           {!collapsed && <div className="nav-section-label">{section.label}</div>}
           {section.items.map(({ label, path, icon: Icon }) => {
@@ -161,7 +161,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<AuthPage />} />
-      <Route path="/judge-demo" element={<JudgeDemo />} />
+      <Route path="/walkthrough" element={<CareWalkthrough />} />
       <Route element={<ProtectedRoute />}><Route element={<AppLayout />}>
           <Route element={<ProtectedRoute allowed={["doctor"]} />}><Route path="/dashboard/doctor" element={<DashboardPage />} /></Route>
           <Route element={<ProtectedRoute allowed={["worker"]} />}><Route path="/dashboard/worker" element={<DashboardPage />} /></Route>
@@ -188,7 +188,7 @@ export default function App() {
 function LandingPage() {
   const { user } = useAuth();
   return <div className="landing-page"><nav className="landing-nav"><Link className="brand" to="/"><span className="brand-mark"><HeartPulse size={19} /></span><span>careloop<span className="brand-dot">.</span></span></Link><div><a href="#how-it-works">How it works</a><a href="#care-teams">For care teams</a><Link to="/login" className="landing-login">Sign in</Link><Button asChild className="btn btn-primary btn-sm"><Link to="/login">Try the demo <ArrowRight size={15} /></Link></Button></div></nav>
-    <section className="hero"><div className="hero-copy"><div className="hero-pill"><span /> BUILT FOR CONTINUITY OF CARE</div><h1>From screening<br />to care, <em>together.</em></h1><p>Every abnormal result deserves a next step. CARELOOP connects care teams and patients to make sure no one falls through the cracks.</p><div className="hero-buttons"><Link to={user ? roleHome(user.role) : "/login"} className="btn btn-primary">Explore the platform <ArrowRight size={17} /></Link><Link to="/judge-demo" className="text-link">Judge walkthrough <ChevronRight size={16} /></Link></div><div className="hero-proof"><div className="proof-avatars"><Avatar initials="P" size="sm" /><Avatar initials="CW" size="sm" /><Avatar initials="D" size="sm" /></div><span>One connected case history for <b>patients and care teams</b></span></div></div>
+    <section className="hero"><div className="hero-copy"><div className="hero-pill"><span /> BUILT FOR CONTINUITY OF CARE</div><h1>From screening<br />to care, <em>together.</em></h1><p>Every abnormal result deserves a next step. CARELOOP connects care teams and patients to make sure no one falls through the cracks.</p><div className="hero-buttons"><Link to={user ? roleHome(user.role) : "/login"} className="btn btn-primary">Explore the platform <ArrowRight size={17} /></Link><Link to="/walkthrough" className="text-link">Care walkthrough <ChevronRight size={16} /></Link></div><div className="hero-proof"><div className="proof-avatars"><Avatar initials="P" size="sm" /><Avatar initials="CW" size="sm" /><Avatar initials="D" size="sm" /></div><span>One connected case history for <b>patients and care teams</b></span></div></div>
       <div className="hero-art"><div className="hero-grid" /><div className="hero-orbit orbit-one" /><div className="hero-orbit orbit-two" /><div className="hero-center"><span className="brand-mark"><HeartPulse size={27} /></span></div>
         <div className="floating-card journey-float"><div className="float-head"><span className="float-icon"><Activity size={16} /></span><span><b>Care journey</b><small>Olivia Rhye · CASE-2048</small></span><Badge tone="blue">Appointment scheduled</Badge></div><div className="mini-steps"><span className="done"><Check size={12} /></span><i /><span className="done"><Check size={12} /></span><i /><span className="current"><span /></span><i /><span /></div><div className="float-progress"><span>Recorded case events</span><b>8</b></div><div className="float-next"><Clock3 size={14} /><span>Next up: <b>Diagnostic ultrasound</b></span><strong>2:30 PM</strong></div></div>
         <div className="floating-card alert-float"><span className="alert-icon"><Bell size={16} /></span><span><b>Follow-up due</b><small>Ethan Brooks · 2 days overdue</small></span><ArrowRight size={15} /></div>
