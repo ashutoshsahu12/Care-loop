@@ -1,5 +1,8 @@
 import http from "node:http";
 import worker from "./worker";
+import { createTestOrLocalDb } from "./db/localDb";
+
+const localDb = createTestOrLocalDb({ seed: true });
 
 const PORT = Number(process.env.PORT || 8787);
 
@@ -33,7 +36,7 @@ const server = http.createServer(async (req, res) => {
       body: body && body.length > 0 ? (body as unknown as BodyInit) : undefined,
     });
 
-    const webRes = await worker.fetch(webReq);
+    const webRes = await worker.fetch(webReq, { DB: localDb });
 
     res.statusCode = webRes.status;
     webRes.headers.forEach((val, key) => {
