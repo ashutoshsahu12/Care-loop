@@ -1,7 +1,7 @@
 import type { ID1Database } from "../db/client";
 import type { Appointment, AppointmentStatus } from "../types/domain";
 import type { User } from "../types/auth";
-import type { AppointmentCreateInput, AppointmentAttendanceInput } from "../validation/schemas";
+import type { AppointmentCreateInput, AppointmentAttendanceInput, AppointmentRescheduleInput } from "../validation/schemas";
 import { TimelineService } from "./timelineService";
 
 export class AppointmentService {
@@ -81,6 +81,50 @@ export class AppointmentService {
       status: "scheduled",
       createdAt: now,
       updatedAt: now,
+    };
+  }
+
+  async rescheduleAppointment(
+    appointmentId: string,
+    input: AppointmentRescheduleInput,
+    actor: User
+  ): Promise<Appointment> {
+    const existing = await this.db.prepare(
+      "SELECT * FROM appointments WHERE id = ?"
+    ).bind(appointmentId).first<{
+      id: string; case_id: string; referral_id: string | null;
+      scheduled_time: string; facility: string; provider_name: string;
+      status: AppointmentStatus; created_at: string;
+    }>();
+    if (!existing) throw new Error(`Appointment '${appointmentId}' not found`);
+    if (existing.status === "attended" || existing.status === "cancelled") {
+      throw new Error("A completed or cancelled appointment cannot be rescheduled.");
+    }
+
+    const now = new Date().toISOString();
+    await this.db.prepare(
+      `UPDATE appointments
+       SET scheduled_time = ?, status = 'scheduled', updated_at = ?,
+           recorded_at = NULL, recorded_by_id = NULL
+       WHERE id = ?`
+    ).bind(input.scheduledTime, now, appointmentId).run();
+    await this.db.prepare(
+      `UPDATE cases SET status = 'appointment_scheduled', next_action = ?,
+       last_activity_at = ?, updated_at = ? WHERE id = ?`
+    ).bind(`Confirm appointment attendance on ${input.scheduledTime.slice(0, 10)}`, now, now, existing.case_id).run();
+    await this.timeline.recordCaseEvent({
+      caseId: existing.case_id, actorId: actor.id, actorRole: actor.role,
+      eventType: "appointment_rescheduled",
+      toStatus: "appointment_scheduled",
+      summary: `Appointment rescheduled from ${existing.scheduled_time} to ${input.scheduledTime}`,
+      metadata: { appointmentId, previousTime: existing.scheduled_time, scheduledTime: input.scheduledTime },
+      createdAt: now,
+    });
+    return {
+      id: existing.id, caseId: existing.case_id,
+      referralId: existing.referral_id, scheduledTime: input.scheduledTime,
+      facility: existing.facility, providerName: existing.provider_name,
+      status: "scheduled", createdAt: existing.created_at, updatedAt: now,
     };
   }
 
