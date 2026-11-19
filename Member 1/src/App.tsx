@@ -709,7 +709,7 @@ function ScreeningsPage() {
 
 function CreateScreeningModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => Promise<void> }) {
   const { user } = useAuth();
-  const patientQuery = useQuery({ queryKey: ["patients", user?.role], queryFn: () => patientService.list(user?.role) });
+  const patientQuery = useQuery({ queryKey: ["screening-candidates", user?.role], queryFn: () => patientService.listForScreening(user?.role) });
   const [patient, setPatient] = useState("");
   const [type, setType] = useState("");
   const [result, setResult] = useState("");

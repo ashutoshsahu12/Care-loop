@@ -242,6 +242,36 @@ export function visibleCaseDetails(
   return details;
 }
 
+/** Choose the newest case among records visible to the current role, not before
+ * applying assignment scoping. An older assigned case may coexist with a newer
+ * case assigned to another care worker.
+ */
+export function latestVisibleCases(
+  all: BackendCaseDetail[], role?: Role, patientRef?: string
+): BackendCaseDetail[] {
+  const latest = new Map<string, BackendCaseDetail>();
+  for (const detail of visibleCaseDetails(all, role, patientRef)) {
+    const ref = detail.patient.patientReference;
+    const previous = latest.get(ref);
+    if (!previous || (detail.caseRecord.createdAt ?? detail.caseRecord.lastActivityAt) >
+      (previous.caseRecord.createdAt ?? previous.caseRecord.lastActivityAt)) {
+      latest.set(ref, detail);
+    }
+  }
+  return [...latest.values()];
+}
+
+/** Registration queue for screening: only records without any case.
+ * Other staff members' existing assigned cases must not leak into the intake list.
+ */
+export function unscreenedRegistrations(
+  registered: BackendPatient[], cases: BackendCaseDetail[]
+): Patient[] {
+  const withCases = new Set(cases.map(detail => detail.patient.patientReference));
+  return registered.filter(patient => !withCases.has(patient.patientReference))
+    .map(toUnscreenedPatient);
+}
+
 export async function findDetailByPatientRef(patientRef: string): Promise<BackendCaseDetail | undefined> {
   const all = await getAllCaseDetails();
   return all.find(item => item.patient.patientReference === patientRef || item.patient.id === patientRef);
