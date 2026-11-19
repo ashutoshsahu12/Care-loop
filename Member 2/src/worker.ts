@@ -1,5 +1,5 @@
 import { AppRouter } from "./routes/router";
-import { createTestOrLocalDb, type ID1Database } from "./db/client";
+import type { ID1Database } from "./db/client";
 
 export interface Env {
   DB?: any;
@@ -7,24 +7,18 @@ export interface Env {
   APP_NAME?: string;
 }
 
-let cachedDb: ID1Database | null = null;
-
-function getDatabase(env: Env): ID1Database {
-  if (env.DB && typeof env.DB.prepare === "function") {
-    // Cloudflare D1 Database binding
-    return env.DB as ID1Database;
-  }
-
-  // Local / test in-memory or fallback SQLite database
-  if (!cachedDb) {
-    cachedDb = createTestOrLocalDb({ seed: true });
-  }
-  return cachedDb;
+function getDatabase(env: Env): ID1Database | null {
+  return env.DB && typeof env.DB.prepare === "function" ? env.DB as ID1Database : null;
 }
 
 export default {
   async fetch(request: Request, env: Env = {}): Promise<Response> {
     const db = getDatabase(env);
+    if (!db) {
+      return new Response(JSON.stringify({ message: "Database binding DB is missing." }), {
+        status: 503, headers: { "Content-Type": "application/json" },
+      });
+    }
     const router = new AppRouter(db);
     return router.handle(request);
   },
