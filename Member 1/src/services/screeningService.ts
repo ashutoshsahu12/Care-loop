@@ -1,15 +1,14 @@
 import { api, isDemoMode } from "./api";
 import { DEMO_PATIENT_ID, patients, screenings } from "../mocks/data";
 import { recordDemoCaseEvent } from "../mocks/caseEvents";
-import type { PatientCase, Role, Screening } from "../types";
+import type { Role, Screening } from "../types";
+import { BACKEND_DEMO_PATIENT_REF, findDetailByPatientRef, getAllCaseDetails, getCaseDetails, toScreening } from "./backendBridge";
 export const screeningService = {
   async list(role?: Role, patientId?: string): Promise<Screening[]> {
     if (!isDemoMode) {
-      if (role === "patient") {
-        const cases = (await api.get<PatientCase[]>("/patient/cases")).data;
-        return cases.map((patientCase) => patientCase.screening);
-      }
-      return (await api.get<Screening[]>(role && role !== "admin" ? "/screenings/assigned" : "/screenings")).data;
+      const details = await getAllCaseDetails();
+      return details.filter(d => role !== "patient" || d.patient.patientReference === (patientId || BACKEND_DEMO_PATIENT_REF))
+        .map(toScreening).filter((item): item is Screening => item !== null);
     }
     if (role === "admin" || !role) return screenings;
     if (role === "patient") {
@@ -22,13 +21,17 @@ export const screeningService = {
   },
   async create(payload: { patient: string; patientId?: string; type: string; result: string; report?: File }): Promise<Screening> {
     if (!isDemoMode) {
-      const body = new FormData();
-      body.append("patient", payload.patient);
-      if (payload.patientId) body.append("patient_id", payload.patientId);
-      body.append("type", payload.type);
-      body.append("result", payload.result);
-      if (payload.report) body.append("report", payload.report);
-      return (await api.post<Screening>("/screenings", body, { headers: { "Content-Type": "multipart/form-data" } })).data;
+      if (payload.report) throw new Error("File uploads are not enabled in the synthetic-data backend. Enter the screening result as text.");
+      const detail = await findDetailByPatientRef(payload.patientId || "") ??
+        (await getAllCaseDetails()).find(item => item.patient.name === payload.patient);
+      if (!detail) throw new Error("Register or select an existing demo patient before screening.");
+      const result = (await api.post<{ careCase: { id: string } }>("/screenings", {
+        patientId: detail.patient.id, screeningType: payload.type, resultValue: payload.result,
+      })).data;
+      const latest = await getCaseDetails(result.careCase.id);
+      const screening = toScreening(latest);
+      if (!screening) throw new Error("Screening was recorded but could not be retrieved.");
+      return screening;
     }
     const initials = payload.patient.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase();
     const resultText = payload.result.toLowerCase();

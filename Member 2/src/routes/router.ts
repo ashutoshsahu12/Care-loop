@@ -209,6 +209,44 @@ export class AppRouter {
         return jsonResponse(result);
       }
 
+      // POST /api/cases/:id/help-requests — synthetic patient portal assistance
+      const helpMatch = path.match(/^\/api\/cases\/([^/]+)\/help-requests$/);
+      if (method === "POST" && helpMatch) {
+        const body = (await request.json()) as { message?: unknown };
+        const message = typeof body.message === "string" ? body.message.trim() : "";
+        if (message.length < 8 || message.length > 1000) {
+          return jsonResponse({ message: "Help request must be 8 to 1000 characters." }, 400);
+        }
+        await this.caseService.getCaseDetails(helpMatch[1]);
+        const event = await this.timelineService.recordCaseEvent({
+          caseId: helpMatch[1], actorId: user.id, actorRole: user.role,
+          eventType: "help_requested",
+          summary: "Patient requested assistance from the care team.",
+          metadata: { message },
+        });
+        return jsonResponse(event, 201);
+      }
+
+      // Record synthetic-data clinical review / outreach notes from Member 1.
+      const noteMatch = path.match(/^\/api\/cases\/([^/]+)\/(notes|communications)$/);
+      if (method === "POST" && noteMatch) {
+        this.authService.checkPermission(user, ["admin", "clinician", "care_worker"]);
+        const body = (await request.json()) as { text?: unknown; channel?: unknown; outcome?: unknown };
+        const message = noteMatch[2] === "notes"
+          ? (typeof body.text === "string" ? body.text.trim() : "")
+          : [body.channel, body.outcome].filter(part => typeof part === "string").join(": ").trim();
+        if (message.length < 3 || message.length > 2000) {
+          return jsonResponse({ message: "A note between 3 and 2000 characters is required." }, 400);
+        }
+        await this.caseService.getCaseDetails(noteMatch[1]);
+        const event = await this.timelineService.recordCaseEvent({
+          caseId: noteMatch[1], actorId: user.id, actorRole: user.role,
+          eventType: noteMatch[2] === "notes" ? "clinical_review" : "followup_activity",
+          summary: message,
+        });
+        return jsonResponse(event, 201);
+      }
+
       // GET /api/cases/:id/timeline
       const timelineMatch = path.match(/^\/api\/cases\/([^/]+)\/timeline$/);
       if (method === "GET" && timelineMatch) {

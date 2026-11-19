@@ -44,7 +44,10 @@ export function CaseTable({
           {cases.map((record) => (
             <tr key={record.id}>
               <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-900">
-                {record.patientReference}
+                {onSelectCase ? (
+                  <button type="button" className="text-teal-700 hover:underline focus-visible:underline"
+                    onClick={() => onSelectCase(record.id)}>{record.patientReference}</button>
+                ) : record.patientReference}
               </td>
               <td className="whitespace-nowrap px-4 py-3">
                 <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700">

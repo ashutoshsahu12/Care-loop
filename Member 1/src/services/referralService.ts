@@ -1,7 +1,8 @@
 import { api, isDemoMode } from "./api";
 import { DEMO_PATIENT_ID, patients } from "../mocks/data";
 import { recordDemoCaseEvent } from "../mocks/caseEvents";
-import type { PatientCase, Referral, Role } from "../types";
+import type { Referral, Role } from "../types";
+import { BACKEND_DEMO_PATIENT_REF, findDetailByPatientRef, getAllCaseDetails, getCaseDetails, toReferral } from "./backendBridge";
 export type { Referral } from "../types";
 export const demoReferrals: Referral[] = [
   { id: "RF-2014", patient: "Amara Okafor", initials: "AO", specialty: "Gynecology", referredTo: "Bayview Women's Health", date: "Nov 15, 2026", status: "Accepted" },
@@ -11,11 +12,9 @@ export const demoReferrals: Referral[] = [
 export const referralService = {
   async list(role?: Role, patientId?: string): Promise<Referral[]> {
     if (!isDemoMode) {
-      if (role === "patient") {
-        const cases = (await api.get<PatientCase[]>("/patient/cases")).data;
-        return cases.flatMap((patientCase) => patientCase.referrals);
-      }
-      return (await api.get<Referral[]>(role && role !== "admin" ? "/referrals/assigned" : "/referrals")).data;
+      const details = await getAllCaseDetails();
+      return details.filter(d => role !== "patient" || d.patient.patientReference === (patientId || BACKEND_DEMO_PATIENT_REF))
+        .flatMap(d => d.referrals.map(r => toReferral(d, r)));
     }
     if (role === "admin" || !role) return demoReferrals;
     if (role === "patient") return patientId === DEMO_PATIENT_ID ? demoReferrals.filter((referral) => referral.patientId === patientId || patients.some((patient) => patient.id === patientId && patient.name === referral.patient)) : [];
@@ -23,7 +22,18 @@ export const referralService = {
     return demoReferrals.filter((referral) => assigned.has(referral.patient));
   },
   async create(payload: { patient: string; patientId?: string; specialty: string; referredTo: string }): Promise<Referral> {
-    if (!isDemoMode) return (await api.post<Referral>("/referrals", { patient: payload.patient, patient_id: payload.patientId, specialty: payload.specialty, referred_to: payload.referredTo })).data;
+    if (!isDemoMode) {
+      const detail = await findDetailByPatientRef(payload.patientId || "") ??
+        (await getAllCaseDetails()).find(item => item.patient.name === payload.patient);
+      if (!detail) throw new Error("Select an existing demo patient before creating a referral.");
+      const result = (await api.post<{ id: string }>(`/cases/${encodeURIComponent(detail.caseRecord.id)}/referrals`, {
+        specialty: payload.specialty, targetFacility: payload.referredTo, urgency: "routine",
+      })).data;
+      const updated = await getCaseDetails(detail.caseRecord.id);
+      const referral = updated.referrals.find(item => item.id === result.id);
+      if (!referral) throw new Error("Referral was recorded but could not be retrieved.");
+      return toReferral(updated, referral);
+    }
     const referral: Referral = {
       id: `RF-${Date.now().toString().slice(-4)}`,
       patient: payload.patient,
@@ -39,7 +49,13 @@ export const referralService = {
     return referral;
   },
   async updateStatus(id: string, status: Referral["status"]): Promise<Referral> {
-    if (!isDemoMode) return (await api.patch<Referral>(`/referrals/${id}`, { status })).data;
+    if (!isDemoMode) {
+      const statusMap: Record<Referral["status"], string> = { Accepted: "accepted", Pending: "pending_acceptance", Scheduled: "accepted" };
+      await api.patch(`/referrals/${encodeURIComponent(id)}`, { status: statusMap[status] });
+      const updated = (await getAllCaseDetails()).find(d => d.referrals.some(r => r.id === id));
+      if (!updated) throw new Error("Updated referral could not be retrieved.");
+      return toReferral(updated, updated.referrals.find(r => r.id === id)!);
+    }
     const referral = demoReferrals.find((item) => item.id === id);
     if (!referral) throw new Error("Referral was not found.");
     referral.status = status;

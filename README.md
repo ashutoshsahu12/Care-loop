@@ -70,6 +70,18 @@ VITE_CARELOOP_API_URL=http://localhost:8787
 
 ---
 
+## Connected three-member demo (local)
+
+1. Use **Node.js 22**. In `Member 2/`, run `npm ci` and `npm run dev`. The seeded SQLite backend starts at `http://localhost:8787`.
+2. In `Member 1/`, run `npm ci`, copy `.env.example` to `.env.local`, then `npm run dev`.
+3. Open the Vite URL and choose a **synthetic demo role**. The demo password is not an actual authentication mechanism.
+4. The Member 1 admin sidebar includes Member 3 monitoring, escalations, at-risk cases and care outcomes, backed by Member 2's API.
+5. Without `VITE_API_BASE_URL`, Member 1 retains its original standalone mock mode. Without `VITE_CARELOOP_USE_DEMO_DATA=false`, Member 3 retains its standalone demo mode.
+
+**Known demo boundaries:** use fictional data only. Connected-mode new-patient registration and real account authentication are not implemented. The backend uses a demo role token and a seeded in-memory database that resets on server restart. Cloudflare deployment requires configuring a real D1 database binding and loading the schema/seed. Do not use this setup for real healthcare records.
+
+---
+
 ## Safety & Compliance Invariants
 
 1. **Synthetic Demo Data Only:** The repository contains only synthetic test data with fictional patients and care workers. No identifiable patient data is committed.

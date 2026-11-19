@@ -1,5 +1,6 @@
-import { api, isDemoMode, tokenKey } from "./api";
+import { isDemoMode, tokenKey } from "./api";
 import type { Role, User } from "../types";
+import { BACKEND_DEMO_PATIENT_REF } from "./backendBridge";
 
 export const demoUsers: User[] = [
   { id: "U-001", name: "Avery Morgan", email: "admin@careloop.demo", role: "admin", initials: "AM" },
@@ -11,9 +12,17 @@ export const demoUsers: User[] = [
 export const authService = {
   async login(email: string, password: string): Promise<User> {
     if (!isDemoMode) {
-      const { data } = await api.post<{ access_token: string; user: User }>("/auth/login", { email, password });
-      localStorage.setItem(tokenKey, data.access_token);
-      return data.user;
+      // Hackathon-only role selection: Member 2 resolves role tokens against synthetic seed users.
+      // This is NOT password authentication and must never be used with real patient data.
+      const account = demoUsers.find(item => item.email === email);
+      if (!account || !password.trim()) throw new Error("Select a demo account and enter any password.");
+      const tokenByRole: Record<Role, string> = {
+        admin: "admin", doctor: "clinician", worker: "care_worker", patient: "patient",
+      };
+      localStorage.setItem(tokenKey, tokenByRole[account.role]);
+      return account.role === "patient"
+        ? { ...account, name: "Kavita Sundaram", initials: "KS", patientId: BACKEND_DEMO_PATIENT_REF }
+        : account;
     }
     await new Promise((resolve) => window.setTimeout(resolve, 300));
     const user = demoUsers.find((item) => item.email === email);
@@ -21,7 +30,7 @@ export const authService = {
     return user;
   },
   async logout(): Promise<void> {
-    if (!isDemoMode) await api.post("/auth/logout");
+    // The synthetic backend has no session/logout endpoint; clear local demo role token.
     localStorage.removeItem(tokenKey);
   },
   roleHome(role: Role): string {
