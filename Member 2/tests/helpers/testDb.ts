@@ -1,4 +1,5 @@
-import { createTestOrLocalDb, type ID1Database } from "../../src/db/client";
+import type { ID1Database } from "../../src/db/client";
+import { createTestOrLocalDb } from "../../src/db/localDb";
 import { AppRouter } from "../../src/routes/router";
 
 export function getFreshTestDb(): ID1Database {
