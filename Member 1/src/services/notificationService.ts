@@ -12,7 +12,9 @@ export const notificationService = {
             (await api.get<BackendNotification[]>(`/cases/${encodeURIComponent(detail.caseRecord.id)}/notifications`)).data
           ))).flat();
       return raw.map(item => ({
-        id: item.id, caseId: item.caseId ?? undefined, title: item.title,
+        id: item.id, caseId: item.caseId ?? undefined,
+        patientId: role === "patient" ? (patientId || BACKEND_DEMO_PATIENT_REF) : undefined,
+        title: item.title,
         description: item.message, time: item.createdAt, createdAt: item.createdAt,
         unread: item.status !== "acknowledged",
         acknowledgedAt: item.acknowledgedAt, tone: "blue",
