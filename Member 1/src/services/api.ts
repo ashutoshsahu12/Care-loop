@@ -13,11 +13,26 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+export type BackendApiError = {
+  detail?: string;
+  message?: string;
+  errors?: Array<{ path?: string; message: string }>;
+};
+
+export function apiErrorMessage(response?: BackendApiError): string | undefined {
+  const validationMessage = response?.errors?.map(item =>
+    item.path ? `${item.path}: ${item.message}` : item.message
+  ).join("; ");
+  return response?.message === "Validation Error" && validationMessage
+    ? validationMessage
+    : response?.message || response?.detail || validationMessage;
+}
+
 api.interceptors.response.use(
   (response) => response,
   (error: unknown) => {
     if (axios.isAxiosError(error)) {
-      const message = (error.response?.data as { detail?: string } | undefined)?.detail;
+      const message = apiErrorMessage(error.response?.data as BackendApiError | undefined);
       return Promise.reject(new Error(message || error.message || "Unable to reach CARELOOP services."));
     }
     return Promise.reject(error);
