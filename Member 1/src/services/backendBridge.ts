@@ -122,7 +122,9 @@ export function toScreening(detail: BackendCaseDetail): Screening | null {
     id: s.id, patient: detail.patient.name, patientId: detail.patient.patientReference,
     initials: initials(detail.patient.name), type: s.screeningType,
     date: dateLabel(s.createdAt), recordedAt: s.createdAt, result: s.resultValue,
-    status: /\b(normal|negative|within range)\b/i.test(s.resultValue) && !/abnormal|positive|high|suspicious/i.test(s.resultValue) ? "Normal" : "Abnormal", clinician: "Care team",
+    status: /\b(normal|negative|within range)\b/i.test(s.resultValue) && !/abnormal|positive|high|suspicious/i.test(s.resultValue)
+      ? "Normal" : /abnormal|positive|high|suspicious|birads|stage [12]/i.test(s.resultValue)
+        ? "Abnormal" : "Pending review", clinician: "Care team",
     reviewState: s.status.replace(/_/g, " "),
   };
 }
@@ -131,7 +133,11 @@ export function toReferral(d: BackendCaseDetail, r: BackendReferral): Referral {
     id: r.id, patient: d.patient.name, patientId: d.patient.patientReference,
     initials: initials(d.patient.name), specialty: r.specialty, referredTo: r.targetFacility,
     date: dateLabel(r.createdAt),
-    status: r.status === "accepted" || r.status === "completed" ? "Accepted" : r.status === "pending_acceptance" ? "Pending" : "Scheduled",
+    status: r.status === "pending_acceptance" ? "Pending"
+      : r.status === "completed" ? "Completed"
+      : r.status === "rejected" ? "Rejected"
+      : r.status === "cancelled" ? "Cancelled"
+      : d.appointments.some(apt => apt.status === "scheduled" && apt.id.length > 0) ? "Scheduled" : "Accepted",
   };
 }
 export function toAppointment(d: BackendCaseDetail, a: BackendAppointment): Appointment {
