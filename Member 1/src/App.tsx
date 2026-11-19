@@ -365,7 +365,7 @@ function PatientDashboard() {
   if (!patientCase) return <EmptyState title="No case is linked to your portal yet" description="Your care team will connect your screening case to this account." />;
   if (eventsQuery.error) return <ErrorState error={(eventsQuery.error as Error).message} onRetry={() => void eventsQuery.refetch()} />;
   const patient = query.data;
-  const nextAppointment = patientCase.appointments.find((appointment) => appointment.status !== "Completed" && appointment.status !== "Missed");
+  const nextAppointment = patientCase.appointments.find((appointment) => appointment.status !== "Completed" && appointment.status !== "Missed" && appointment.status !== "Cancelled");
   return <div className="page-stack patient-portal">
     <PageHeader eyebrow="YOUR CARE JOURNEY" title={`Hello, ${user?.name.split(" ")[0]}`} description="Here’s an update on your screening and next steps." action={<Link className="btn btn-secondary" to="/my-case">View my case <ArrowRight size={15} /></Link>} />
     <div className="patient-welcome-card"><div className="welcome-icon"><HeartPulse size={23} /></div><div><Badge tone={statusTone(patientCase.status)}>{patientCase.status}</Badge><h2>Your care case is active</h2><p>{patientCase.nextAction}</p></div><div className="welcome-date"><CalendarDays size={16} /><span><small>NEXT APPOINTMENT</small><b>{nextAppointment ? `${nextAppointment.date} · ${nextAppointment.time}` : "Not scheduled"}</b></span></div></div>
@@ -617,7 +617,7 @@ function PatientDetailsPage() {
   if (query.error) return <ErrorState error={(query.error as Error).message} onRetry={() => void query.refetch()} />;
   const patient = query.data;
   if (!patient) return <EmptyState title="Patient not found" description="This patient record may have been removed or is unavailable." />;
-  if (user?.role === "patient" && patient.id !== "CL-2048") return <Navigate to="/dashboard/patient" replace />;
+  if (user?.role === "patient" && patient.id !== user.patientId) return <Navigate to="/dashboard/patient" replace />;
   return <div className="page-stack">
     <div className="back-link-row"><Link to={user?.role === "patient" ? "/dashboard/patient" : "/patients"} className="back-link"><ChevronLeft size={15} /> {user?.role === "patient" ? "My care" : "All patients"}</Link><span className="detail-id">PATIENT ID <b>{patient.id}</b></span></div>
     <div className="patient-profile-header"><div className="patient-main-identity"><Avatar initials={patient.initials} size="lg" /><div><div className="identity-name-row"><h1>{patient.name}</h1><Badge tone={statusTone(patient.status)}><i className="badge-dot" />{patient.status}</Badge></div><p>{patient.age} years · {patient.gender} · {patient.location}</p><div className="identity-contact"><span>{patient.phone}</span><i /> <span>{patient.email}</span></div></div></div><div className="patient-actions">{user?.role !== "patient" && <><button className="btn btn-secondary btn-sm" disabled={contactMutation.isPending} onClick={() => contactMutation.mutate()}><Bell size={14} /> {contactMutation.isPending ? "Recording…" : "Log contact"}</button><button className="btn btn-primary btn-sm" onClick={() => navigate("/appointments")}><CalendarDays size={14} /> Schedule follow-up</button></>}</div></div>
