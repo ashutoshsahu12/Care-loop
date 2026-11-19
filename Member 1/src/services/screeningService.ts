@@ -2,12 +2,12 @@ import { api, isDemoMode } from "./api";
 import { DEMO_PATIENT_ID, patients, screenings } from "../mocks/data";
 import { recordDemoCaseEvent } from "../mocks/caseEvents";
 import type { Role, Screening } from "../types";
-import { BACKEND_DEMO_PATIENT_REF, findDetailByPatientRef, getAllBackendPatients, getAllCaseDetails, getCaseDetails, toScreening } from "./backendBridge";
+import { BACKEND_DEMO_PATIENT_REF, findDetailByPatientRef, getAllBackendPatients, getAllCaseDetails, getCaseDetails, toScreening, visibleCaseDetails } from "./backendBridge";
 export const screeningService = {
   async list(role?: Role, patientId?: string): Promise<Screening[]> {
     if (!isDemoMode) {
       const details = await getAllCaseDetails();
-      return details.filter(d => role !== "patient" || d.patient.patientReference === (patientId || BACKEND_DEMO_PATIENT_REF))
+      return visibleCaseDetails(details, role, patientId)
         .map(toScreening).filter((item): item is Screening => item !== null);
     }
     if (role === "admin" || !role) return screenings;
