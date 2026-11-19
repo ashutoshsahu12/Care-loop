@@ -209,6 +209,24 @@ export class AppRouter {
         return jsonResponse(result);
       }
 
+      // POST /api/cases/:id/help-requests — synthetic patient portal assistance
+      const helpMatch = path.match(/^\\/api\\/cases\\/([^/]+)\\/help-requests$/);
+      if (method === "POST" && helpMatch) {
+        const body = (await request.json()) as { message?: unknown };
+        const message = typeof body.message === "string" ? body.message.trim() : "";
+        if (message.length < 8 || message.length > 1000) {
+          return jsonResponse({ message: "Help request must be 8 to 1000 characters." }, 400);
+        }
+        await this.caseService.getCaseDetails(helpMatch[1]);
+        const event = await this.timelineService.recordCaseEvent({
+          caseId: helpMatch[1], actorId: user.id, actorRole: user.role,
+          eventType: "help_requested",
+          summary: "Patient requested assistance from the care team.",
+          metadata: { message },
+        });
+        return jsonResponse(event, 201);
+      }
+
       // GET /api/cases/:id/timeline
       const timelineMatch = path.match(/^\/api\/cases\/([^/]+)\/timeline$/);
       if (method === "GET" && timelineMatch) {
