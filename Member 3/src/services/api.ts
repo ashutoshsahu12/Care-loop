@@ -17,6 +17,10 @@ export async function apiRequest<T>(
     ...init,
     headers: {
       Accept: "application/json",
+      // Same synthetic demo identity as Member 1; never rely on backend admin fallback.
+      ...(typeof localStorage !== "undefined" && localStorage.getItem("careloop.accessToken")
+        ? { Authorization: `Bearer ${localStorage.getItem("careloop.accessToken")}` }
+        : {}),
       ...(init.body ? { "Content-Type": "application/json" } : {}),
       ...init.headers,
     },

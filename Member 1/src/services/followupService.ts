@@ -2,13 +2,12 @@ import { api, isDemoMode } from "./api";
 import { DEMO_PATIENT_ID, followUps, patients } from "../mocks/data";
 import { recordDemoCaseEvent } from "../mocks/caseEvents";
 import type { FollowUp, Role } from "../types";
-import { BACKEND_DEMO_PATIENT_REF, findDetailByPatientRef, getAllCaseDetails, getCaseDetails, toFollowUp } from "./backendBridge";
+import { findDetailByPatientRef, getAllCaseDetails, getCaseDetails, toFollowUp, visibleCaseDetails } from "./backendBridge";
 export const followupService = {
   async list(role?: Role, patientId?: string): Promise<FollowUp[]> {
     if (!isDemoMode) {
       const details = await getAllCaseDetails();
-      return details.filter(d => role !== "patient" || d.patient.patientReference === (patientId || BACKEND_DEMO_PATIENT_REF))
-        .flatMap(d => d.tasks.map(t => toFollowUp(d, t)));
+      return visibleCaseDetails(details, role, patientId).flatMap(d => d.tasks.map(t => toFollowUp(d, t)));
     }
     if (role === "admin" || !role) return followUps;
     if (role === "patient") {
@@ -24,8 +23,15 @@ export const followupService = {
       const detail = await findDetailByPatientRef(payload.patientId || "") ??
         (await getAllCaseDetails()).find(d => d.patient.name === payload.patient);
       if (!detail) throw new Error("Select an existing case before creating a follow-up.");
+      const workers: Record<string, string> = {
+        "A. Sharma": "usr-cw-1", "R. Kumar": "usr-cw-2",
+        "S. Iyer": "usr-cw-3", "M. Das": "usr-cw-4",
+        "Jordan Lee": "usr-cw-1",
+      };
+      const assignedToId = workers[payload.owner];
+      if (!assignedToId) throw new Error("Choose an assigned care worker from the connected demo team.");
       const created = (await api.post<{ id: string }>(`/cases/${encodeURIComponent(detail.caseRecord.id)}/tasks`, {
-        assignedToId: "usr-cw-1", title: payload.reason, dueDate: payload.due,
+        assignedToId, title: payload.reason, dueDate: payload.due,
       })).data;
       const updated = await getCaseDetails(detail.caseRecord.id);
       const task = updated.tasks.find(t => t.id === created.id);

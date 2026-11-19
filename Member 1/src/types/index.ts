@@ -1,6 +1,7 @@
 export type Role = "admin" | "doctor" | "worker" | "patient";
 export type CaseStatus =
   | "In progress"
+  | "In care"
   | "Awaiting patient"
   | "Appointment scheduled"
   | "Referred"
@@ -82,7 +83,7 @@ export interface Referral {
   specialty: string;
   referredTo: string;
   date: string;
-  status: "Accepted" | "Pending" | "Scheduled";
+  status: "Accepted" | "Pending" | "Scheduled" | "Completed" | "Rejected" | "Cancelled";
 }
 
 export interface FollowUp {

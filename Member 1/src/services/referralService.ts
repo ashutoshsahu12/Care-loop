@@ -2,7 +2,7 @@ import { api, isDemoMode } from "./api";
 import { DEMO_PATIENT_ID, patients } from "../mocks/data";
 import { recordDemoCaseEvent } from "../mocks/caseEvents";
 import type { Referral, Role } from "../types";
-import { BACKEND_DEMO_PATIENT_REF, findDetailByPatientRef, getAllCaseDetails, getCaseDetails, toReferral } from "./backendBridge";
+import { findDetailByPatientRef, getAllCaseDetails, getCaseDetails, toReferral, visibleCaseDetails } from "./backendBridge";
 export type { Referral } from "../types";
 export const demoReferrals: Referral[] = [
   { id: "RF-2014", patient: "Amara Okafor", initials: "AO", specialty: "Gynecology", referredTo: "Bayview Women's Health", date: "Nov 15, 2026", status: "Accepted" },
@@ -13,8 +13,7 @@ export const referralService = {
   async list(role?: Role, patientId?: string): Promise<Referral[]> {
     if (!isDemoMode) {
       const details = await getAllCaseDetails();
-      return details.filter(d => role !== "patient" || d.patient.patientReference === (patientId || BACKEND_DEMO_PATIENT_REF))
-        .flatMap(d => d.referrals.map(r => toReferral(d, r)));
+      return visibleCaseDetails(details, role, patientId).flatMap(d => d.referrals.map(r => toReferral(d, r)));
     }
     if (role === "admin" || !role) return demoReferrals;
     if (role === "patient") return patientId === DEMO_PATIENT_ID ? demoReferrals.filter((referral) => referral.patientId === patientId || patients.some((patient) => patient.id === patientId && patient.name === referral.patient)) : [];
@@ -50,7 +49,13 @@ export const referralService = {
   },
   async updateStatus(id: string, status: Referral["status"]): Promise<Referral> {
     if (!isDemoMode) {
-      const statusMap: Record<Referral["status"], string> = { Accepted: "accepted", Pending: "pending_acceptance", Scheduled: "accepted" };
+      if (status === "Scheduled") {
+        throw new Error("To mark a referral as scheduled, book an appointment for its case first.");
+      }
+      const statusMap: Record<Exclude<Referral["status"], "Scheduled">, string> = {
+        Accepted: "accepted", Pending: "pending_acceptance",
+        Completed: "completed", Rejected: "rejected", Cancelled: "cancelled",
+      };
       await api.patch(`/referrals/${encodeURIComponent(id)}`, { status: statusMap[status] });
       const updated = (await getAllCaseDetails()).find(d => d.referrals.some(r => r.id === id));
       if (!updated) throw new Error("Updated referral could not be retrieved.");
