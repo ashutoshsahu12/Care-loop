@@ -26,10 +26,10 @@ export const appointmentService = {
     }
     return appointments;
   },
-  async request(patient: string, date: string, type: string, patientId?: string, caseId?: string): Promise<void> {
+  async request(patient: string, date: string, type: string, patientId?: string, caseId?: string, referralId?: string): Promise<void> {
     if (!isDemoMode) {
-      const detail = await findDetailByPatientRef(patientId || "") ??
-        (await getAllCaseDetails()).find(item => item.patient.name === patient);
+      const detail = caseId ? undefined : patientId ? await findDetailByPatientRef(patientId)
+        : (await getAllCaseDetails()).find(item => item.patient.name === patient);
       const targetCase = caseId || detail?.caseRecord.id;
       if (!targetCase) throw new Error("Select a patient with an active case.");
       const selectedDate = date.length === 10 ? `${date}T12:00:00.000Z` : new Date(date).toISOString();
@@ -41,7 +41,7 @@ export const appointmentService = {
         return;
       }
       await api.post(`/cases/${encodeURIComponent(targetCase)}/appointments`, {
-        scheduledTime: selectedDate, facility: "CARELOOP Demo Clinic", providerName: "Care team",
+        scheduledTime: selectedDate, facility: "CARELOOP Demo Clinic", providerName: "Care team", referralId,
       });
       return;
     }
@@ -50,6 +50,9 @@ export const appointmentService = {
     const initials = patientName.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase();
     appointments.unshift({ id: `AP-${Date.now().toString().slice(-4)}`, patient: patientName, patientId, initials, type, date: new Date(`${date}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }), time: "Time to be confirmed", clinician: "Care team", status: "Needs confirmation" });
     recordDemoCaseEvent(patientId, patientName, "appointment_recorded", `${type} appointment request recorded for ${new Date(`${date}T12:00:00`).toLocaleDateString("en-US", { dateStyle: "medium" })}.`, "Care team", "Care coordinator");
+  },
+  async recordAttendance(id: string, status: "attended" | "no_show" | "cancelled", attendanceNotes: string): Promise<void> {
+    await api.patch(`/appointments/${encodeURIComponent(id)}/attendance`, { status, attendanceNotes });
   },
   async reschedule(id: string, date: string): Promise<void> {
     if (!isDemoMode) {

@@ -77,6 +77,7 @@ export interface Appointment {
 
 export interface Referral {
   id: string;
+  caseId?: string;
   patient: string;
   patientId?: string;
   initials: string;

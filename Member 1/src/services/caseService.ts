@@ -58,26 +58,25 @@ export const caseService = {
       .sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt));
   },
 
-  async acknowledge(caseId: string, patientId: string): Promise<CaseTimelineEvent> {
+  async acknowledge(caseId: string, patientId: string, notificationId?: number | string): Promise<void> {
     if (!isDemoMode) {
       const summary = await getPatientSummary(patientId);
-      const notification = summary.unreadNotifications.find(item => item.caseId === caseId && item.status !== "acknowledged");
+      const notification = summary.unreadNotifications.find(item => item.caseId === caseId && item.status !== "acknowledged" &&
+        (notificationId === undefined || item.id === notificationId));
       if (!notification) throw new Error("No pending notification exists for this care case.");
       await api.post(`/notifications/${encodeURIComponent(notification.id)}/acknowledge`, {});
-      const timeline = await caseService.getTimeline(caseId, patientId);
-      const event = [...timeline].reverse().find(item => item.eventType === "patient_acknowledged");
-      if (!event) throw new Error("Acknowledgement recorded, but the timeline has not updated yet.");
-      return event;
+      return;
     }
     requireDemoPatientCase(caseId, patientId);
-    const notification = notifications.find((item) => item.caseId === caseId && item.patientId === patientId);
+    const notification = notifications.find((item) => item.caseId === caseId && item.patientId === patientId &&
+      (notificationId === undefined || item.id === notificationId));
     if (!notification) throw new Error("There is no notification to acknowledge for this case.");
     if (notification.acknowledgedAt) throw new Error("This care update has already been acknowledged.");
 
     const acknowledgedAt = new Date().toISOString();
     notification.acknowledgedAt = acknowledgedAt;
     notification.unread = false;
-    return appendDemoCaseEvent({
+    appendDemoCaseEvent({
       caseId,
       patientId,
       eventType: "patient_acknowledged",

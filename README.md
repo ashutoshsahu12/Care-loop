@@ -122,7 +122,7 @@ All demo records and dashboard/analytics figures are synthetic and illustrative.
 
 ## API configuration
 
-Inside `Member 1/`, copy `.env.example` to `.env.local` and set `VITE_API_BASE_URL` to the backend base URL, for example `http://localhost:8000/api`. The API client adds the access token as a bearer token and reports API errors rather than silently switching to mock responses. The frontend service layer is in `Member 1/src/services/`; synthetic records and recorded demo case events are in `Member 1/src/mocks/`.
+Inside `Member 1/`, copy `.env.example` to `.env.local` and set `VITE_API_BASE_URL` to the backend base URL, for example `http://localhost:8787/api`. The API client adds the access token as a bearer token and reports API errors rather than silently switching to mock responses. The frontend service layer is in `Member 1/src/services/`; synthetic records and recorded demo case events are in `Member 1/src/mocks/`.
 
 The patient case service expects `GET /patient/cases`, `GET /cases/:id/timeline`, `POST /cases/:id/acknowledge`, and `POST /cases/:id/help-requests`. Case closure uses `POST /cases/:id/closure` with an outcome and evidence note. These paths must be agreed with and implemented by the API owner; the frontend does not transition production case status or authorize access.
 

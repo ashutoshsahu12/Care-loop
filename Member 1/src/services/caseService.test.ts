@@ -63,8 +63,8 @@ describe("patient case data", () => {
   });
 
   it("records one patient acknowledgment and rejects duplicate or cross-case actions", async () => {
-    const event = await caseService.acknowledge("CASE-2048", "CL-2048");
-    expect(event.eventType).toBe("patient_acknowledged");
+    await caseService.acknowledge("CASE-2048", "CL-2048");
+    expect(demoCaseEvents.at(-1)?.eventType).toBe("patient_acknowledged");
     expect(notifications.find((notification) => notification.caseId === "CASE-2048")?.acknowledgedAt).toBeTruthy();
     await expect(caseService.acknowledge("CASE-2048", "CL-2048")).rejects.toThrow("already been acknowledged");
     await expect(caseService.acknowledge("CASE-2048", "CL-2047")).rejects.toThrow("not available");

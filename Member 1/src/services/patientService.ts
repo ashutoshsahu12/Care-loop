@@ -2,7 +2,7 @@ import { api, isDemoMode } from "./api";
 import { DEMO_PATIENT_ID, patients } from "../mocks/data";
 import { recordDemoCaseEvent } from "../mocks/caseEvents";
 import type { CaseStatus, Patient, Role } from "../types";
-import { BACKEND_DEMO_PATIENT_REF, backendStatus, findDetailByPatientRef, getAllBackendPatients, getAllCaseDetails, getCaseDetails, getBackendPatient, toPatient, toUnscreenedPatient, latestVisibleCases, unscreenedRegistrations } from "./backendBridge";
+import { BACKEND_DEMO_PATIENT_REF, DEMO_WORKER_NAMES, backendStatus, findDetailByPatientRef, getAllBackendPatients, getAllCaseDetails, getCaseDetails, getBackendPatient, toPatient, toUnscreenedPatient, latestVisibleCases, unscreenedRegistrations } from "./backendBridge";
 
 const delay = () => new Promise((resolve) => window.setTimeout(resolve, 180));
 export const patientService = {
@@ -70,7 +70,7 @@ export const patientService = {
     return created;
   },
   async closeCase(id: string, caseId: string, confirmationNote: string, verifiedBy: string): Promise<Patient> {
-    if (confirmationNote.trim().length < 8) throw new Error("Document the completed follow-up or treatment before closing this case.");
+    if (confirmationNote.trim().length < (isDemoMode ? 8 : 10)) throw new Error("Document the completed follow-up or treatment before closing this case.");
     if (!caseId) throw new Error("A linked case is required before requesting verified closure.");
     if (!isDemoMode) {
       await api.post(`/cases/${encodeURIComponent(caseId)}/close`, { outcome: "care_completed", evidenceNote: confirmationNote });
@@ -89,9 +89,9 @@ export const patientService = {
     recordDemoCaseEvent(patient.id, patient.name, "case_verified_closed", "Care completion was verified and the case was closed.", verifiedBy, "Authorized care team",);
     return patient;
   },
-  async addClinicalNote(id: string, text: string, author: string): Promise<Patient> {
+  async addClinicalNote(id: string, text: string, author: string, caseId?: string): Promise<Patient> {
     if (!isDemoMode) {
-      const detail = await findDetailByPatientRef(id);
+      const detail = caseId ? await getCaseDetails(caseId) : await findDetailByPatientRef(id);
       if (!detail) throw new Error("Patient not found.");
       await api.post(`/cases/${encodeURIComponent(detail.caseRecord.id)}/notes`, { text });
       return toPatient(await getCaseDetails(detail.caseRecord.id));
@@ -104,9 +104,9 @@ export const patientService = {
     recordDemoCaseEvent(patient.id, patient.name, "clinical_review", "A clinician added a note to the internal care record.", author, "Doctor");
     return patient;
   },
-  async updateProgress(id: string, nextAction: string, status: Exclude<CaseStatus, "Closed">): Promise<Patient> {
+  async updateProgress(id: string, nextAction: string, status: Exclude<CaseStatus, "Closed">, caseId?: string): Promise<Patient> {
     if (!isDemoMode) {
-      const detail = await findDetailByPatientRef(id);
+      const detail = caseId ? await getCaseDetails(caseId) : await findDetailByPatientRef(id);
       if (!detail) throw new Error("Patient not found.");
       await api.patch(`/cases/${encodeURIComponent(detail.caseRecord.id)}/status`, { targetStatus: backendStatus(status), nextAction });
       return toPatient(await getCaseDetails(detail.caseRecord.id));
@@ -120,9 +120,9 @@ export const patientService = {
     recordDemoCaseEvent(patient.id, patient.name, "case_status_updated", `Case status updated to ${status}; next action: ${nextAction}.`, "Care team", "Care team");
     return patient;
   },
-  async recordCommunication(id: string, channel: string, outcome: string): Promise<Patient> {
+  async recordCommunication(id: string, channel: string, outcome: string, caseId?: string): Promise<Patient> {
     if (!isDemoMode) {
-      const detail = await findDetailByPatientRef(id);
+      const detail = caseId ? await getCaseDetails(caseId) : await findDetailByPatientRef(id);
       if (!detail) throw new Error("Patient not found.");
       await api.post(`/cases/${encodeURIComponent(detail.caseRecord.id)}/communications`, { channel, outcome });
       return toPatient(await getCaseDetails(detail.caseRecord.id));
@@ -135,11 +135,13 @@ export const patientService = {
     recordDemoCaseEvent(patient.id, patient.name, "followup_activity", `${channel} contact attempt recorded: ${outcome}`, "Care team", "Care coordinator");
     return patient;
   },
-  async assignCareTeam(id: string, doctor: string, coordinator: string): Promise<Patient> {
+  async assignCareTeam(id: string, doctor: string, coordinator: string, caseId?: string): Promise<Patient> {
     if (!isDemoMode) {
-      const detail = await findDetailByPatientRef(id);
+      const detail = caseId ? await getCaseDetails(caseId) : await findDetailByPatientRef(id);
       if (!detail) throw new Error("Patient not found.");
-      await api.patch(`/cases/${encodeURIComponent(detail.caseRecord.id)}/assign`, { ownerId: "usr-cw-1", assignedCareWorkerName: coordinator, reason: `Assigned by ${doctor}` });
+      const ownerId = Object.keys(DEMO_WORKER_NAMES).find(id => DEMO_WORKER_NAMES[id] === coordinator);
+      if (!ownerId) throw new Error("Choose a care coordinator from the connected demo team.");
+      await api.patch(`/cases/${encodeURIComponent(detail.caseRecord.id)}/assign`, { ownerId });
       return toPatient(await getCaseDetails(detail.caseRecord.id));
     }
     await delay();

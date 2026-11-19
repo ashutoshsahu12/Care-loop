@@ -1,5 +1,6 @@
 import type { ID1Database } from "../db/client";
 import type { Appointment, AppointmentStatus } from "../types/domain";
+import type { CaseStatus } from "../types/admin";
 import type { User } from "../types/auth";
 import type { AppointmentCreateInput, AppointmentAttendanceInput, AppointmentRescheduleInput } from "../validation/schemas";
 import { TimelineService } from "./timelineService";
@@ -13,11 +14,25 @@ export class AppointmentService {
     this.timeline = timeline ?? new TimelineService(db);
   }
 
+  private async getOpenCaseStatus(caseId: string): Promise<CaseStatus> {
+    const record = await this.db.prepare("SELECT status FROM cases WHERE id = ?")
+      .bind(caseId).first<{ status: CaseStatus }>();
+    if (!record) throw new Error(`Case '${caseId}' not found`);
+    if (record.status === "completed") throw new Error("Appointments cannot change a closed case.");
+    return record.status;
+  }
+
   async scheduleAppointment(
     caseId: string,
     input: AppointmentCreateInput,
     actor: User
   ): Promise<Appointment> {
+    const caseStatus = await this.getOpenCaseStatus(caseId);
+    if (input.referralId) {
+      const referral = await this.db.prepare("SELECT id FROM referrals WHERE id = ? AND case_id = ?")
+        .bind(input.referralId, caseId).first();
+      if (!referral) throw new Error("The selected referral does not belong to this case.");
+    }
     const id = `apt-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const now = new Date().toISOString();
 
@@ -60,6 +75,7 @@ export class AppointmentService {
       actorId: actor.id,
       actorRole: actor.role,
       eventType: "appointment_scheduled",
+      fromStatus: caseStatus,
       toStatus: "appointment_scheduled",
       summary: `Appointment scheduled at ${input.facility} with ${input.providerName} for ${input.scheduledTime}`,
       metadata: {
@@ -101,11 +117,12 @@ export class AppointmentService {
       throw new Error("A completed or cancelled appointment cannot be rescheduled.");
     }
 
+    const caseStatus = await this.getOpenCaseStatus(existing.case_id);
     const now = new Date().toISOString();
     await this.db.prepare(
       `UPDATE appointments
        SET scheduled_time = ?, status = 'scheduled', updated_at = ?,
-           recorded_at = NULL, recorded_by_id = NULL
+           attendance_notes = NULL, recorded_at = NULL, recorded_by_id = NULL
        WHERE id = ?`
     ).bind(input.scheduledTime, now, appointmentId).run();
     await this.db.prepare(
@@ -115,6 +132,7 @@ export class AppointmentService {
     await this.timeline.recordCaseEvent({
       caseId: existing.case_id, actorId: actor.id, actorRole: actor.role,
       eventType: "appointment_rescheduled",
+      fromStatus: caseStatus,
       toStatus: "appointment_scheduled",
       summary: `Appointment rescheduled from ${existing.scheduled_time} to ${input.scheduledTime}`,
       metadata: { appointmentId, previousTime: existing.scheduled_time, scheduledTime: input.scheduledTime },
@@ -157,6 +175,7 @@ export class AppointmentService {
       throw new Error(`Appointment '${appointmentId}' not found`);
     }
 
+    const caseStatus = await this.getOpenCaseStatus(existing.case_id);
     await this.db
       .prepare(
         `UPDATE appointments 
@@ -166,7 +185,7 @@ export class AppointmentService {
       .bind(input.status, input.attendanceNotes ?? null, actor.id, now, now, appointmentId)
       .run();
 
-    let targetCaseStatus = "in_care";
+    let targetCaseStatus: CaseStatus = "in_care";
     let nextAction = "Record clinical follow-up / treatment outcome";
 
     if (input.status === "no_show") {
@@ -194,8 +213,8 @@ export class AppointmentService {
       actorId: actor.id,
       actorRole: actor.role,
       eventType: "attendance_recorded",
-      fromStatus: "appointment_scheduled",
-      toStatus: targetCaseStatus as any,
+      fromStatus: caseStatus,
+      toStatus: targetCaseStatus,
       summary: `Appointment attendance recorded: ${input.status} at ${existing.facility}`,
       metadata: {
         appointmentId,

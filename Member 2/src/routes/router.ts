@@ -100,6 +100,23 @@ export class AppRouter {
     return patient.id;
   }
 
+  private async getVisibleTimeline(caseId: string, user: User) {
+    const timeline = await this.timelineService.getCaseTimeline(caseId);
+    if (user.role !== "patient") return timeline;
+    return timeline
+      .filter(event => event.eventType !== "clinical_review" && event.eventType !== "followup_activity")
+      .map(event => ({ ...event, metadata: null }));
+  }
+
+  private async notificationRecipientIds(user: User): Promise<Set<string>> {
+    if (user.role !== "patient") return new Set([user.id]);
+    const patientId = await this.resolvePatientTarget(user);
+    const patient = await this.db.prepare(
+      "SELECT patient_reference as patientReference FROM patients WHERE id = ?"
+    ).bind(patientId).first<{ patientReference: string }>();
+    return new Set([user.id, patientId, patient?.patientReference ?? patientId]);
+  }
+
   async handle(request: Request): Promise<Response> {
     if (request.method === "OPTIONS") {
       return handleCors();
@@ -194,6 +211,7 @@ export class AppRouter {
 
       // POST /api/screenings - Submit screening result and auto-create case
       if (method === "POST" && path === "/api/screenings") {
+        this.authService.checkPermission(user, ["admin", "clinician", "care_worker"]);
         const body = await request.json();
         const input = ScreeningSubmissionSchema.parse(body);
         const result = await this.caseService.submitScreeningAndCreateCase(input, user);
@@ -228,14 +246,23 @@ export class AppRouter {
         const referrals = await this.referralService.getReferralsByCase(caseId);
         const appointments = await this.appointmentService.getAppointmentsByCase(caseId);
         const tasks = await this.taskService.getTasksByCase(caseId);
-        const timeline = await this.timelineService.getCaseTimeline(caseId);
-        return jsonResponse({
-          ...details,
-          referrals,
-          appointments,
-          tasks,
-          timeline,
-        });
+        const timeline = await this.getVisibleTimeline(caseId, user);
+        if (user.role === "patient") {
+          const screening = details.screeningResult;
+          return jsonResponse({
+            caseRecord: details.caseRecord,
+            patient: details.patient,
+            screeningResult: screening ? {
+              id: screening.id, screeningType: screening.screeningType, resultValue: screening.resultValue,
+              status: screening.status, createdAt: screening.createdAt,
+            } : null,
+            referrals: referrals.map(({ id, specialty, targetFacility, createdAt, status }) => ({ id, specialty, targetFacility, createdAt, status })),
+            appointments: appointments.map(({ id, caseId, referralId, scheduledTime, facility, providerName, status }) => ({ id, caseId, referralId, scheduledTime, facility, providerName, status })),
+            tasks: tasks.map(({ id, title, dueDate, status, assignedToId }) => ({ id, title, dueDate, status, assignedToId })),
+            timeline,
+          });
+        }
+        return jsonResponse({ ...details, referrals, appointments, tasks, timeline });
       }
 
       // PATCH /api/cases/:id/assign
@@ -312,6 +339,7 @@ export class AppRouter {
           caseId: noteMatch[1], actorId: user.id, actorRole: user.role,
           eventType: noteMatch[2] === "notes" ? "clinical_review" : "followup_activity",
           summary: message,
+          metadata: noteMatch[2] === "communications" ? { channel: body.channel, outcome: body.outcome } : undefined,
         });
         return jsonResponse(event, 201);
       }
@@ -321,7 +349,7 @@ export class AppRouter {
       if (method === "GET" && timelineMatch) {
         const caseId = timelineMatch[1];
         await this.ensurePatientCaseAccess(user, caseId);
-        const events = await this.timelineService.getCaseTimeline(caseId);
+        const events = await this.getVisibleTimeline(caseId, user);
         return jsonResponse(events);
       }
 
@@ -459,13 +487,12 @@ export class AppRouter {
           // empty body ok
         }
         const input = NotificationAcknowledgeSchema.parse(body);
-        if (user.role === "patient") {
-          const recipient = await this.db.prepare(
-            "SELECT recipient_id as recipientId FROM notifications WHERE id = ?"
-          ).bind(notifId).first<{ recipientId: string }>();
-          if (recipient && recipient.recipientId !== user.id) {
-            throw new Error("Forbidden: This notification is not addressed to you.");
-          }
+        const recipient = await this.db.prepare(
+          "SELECT recipient_id as recipientId, recipient_role as recipientRole FROM notifications WHERE id = ?"
+        ).bind(notifId).first<{ recipientId: string; recipientRole: string }>();
+        if (recipient && (recipient.recipientRole !== user.role ||
+          !(await this.notificationRecipientIds(user)).has(recipient.recipientId))) {
+          throw new Error("Forbidden: This notification is not addressed to you.");
         }
         const updated = await this.notificationService.acknowledgeNotification(notifId, user, input.notes);
         return jsonResponse(updated);
@@ -477,7 +504,14 @@ export class AppRouter {
         const caseId = notifCaseMatch[1];
         await this.ensurePatientCaseAccess(user, caseId);
         const notifs = await this.notificationService.getNotificationsByCase(caseId);
-        return jsonResponse(user.role === "patient" ? notifs.filter(item => item.recipientId === user.id) : notifs);
+        if (user.role !== "patient") return jsonResponse(notifs);
+        const recipients = await this.notificationRecipientIds(user);
+        return jsonResponse(notifs.filter(item => item.recipientRole === user.role && recipients.has(item.recipientId)));
+      }
+
+      if (method === "GET" && path === "/api/notifications") {
+        this.authService.checkPermission(user, ["admin", "clinician", "care_worker"]);
+        return jsonResponse(await this.notificationService.getNotificationsForUser(user));
       }
 
       // --- Member 1 Patient Portal Endpoints ---

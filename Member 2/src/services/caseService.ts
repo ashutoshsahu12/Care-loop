@@ -83,7 +83,7 @@ export class CaseService {
       .run();
 
     // Create case
-    const caseId = `CL-${Math.floor(1000 + Math.random() * 9000)}`;
+    const caseId = `CL-${crypto.randomUUID()}`;
     const hasOwner = Boolean(input.assignedCareWorkerId);
     const initialStatus: CaseStatus = hasOwner ? "screening" : "unassigned";
 

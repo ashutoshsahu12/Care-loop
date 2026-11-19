@@ -98,7 +98,7 @@ export class NotificationService {
       .bind(now, notificationId)
       .run();
 
-    if (existing.case_id) {
+    if (existing.case_id && actor.role === "patient") {
       await this.timeline.recordCaseEvent({
         caseId: existing.case_id,
         actorId: actor.id,
@@ -126,6 +126,15 @@ export class NotificationService {
       acknowledgedAt: now,
       createdAt: existing.created_at,
     };
+  }
+
+  async getNotificationsForUser(user: User): Promise<Notification[]> {
+    const result = await this.db.prepare(
+      `SELECT id, case_id as caseId, recipient_id as recipientId, recipient_role as recipientRole,
+              type, title, message, status, acknowledged_at as acknowledgedAt, created_at as createdAt
+       FROM notifications WHERE recipient_id = ? AND recipient_role = ? ORDER BY created_at DESC`
+    ).bind(user.id, user.role).all<Notification>();
+    return result.results || [];
   }
 
   async getNotificationsByCase(caseId: string): Promise<Notification[]> {
