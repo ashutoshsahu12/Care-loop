@@ -8,6 +8,8 @@ export type CaseEventType =
   | "status_changed"
   | "patient_acknowledged"
   | "help_requested"
+  | "clinical_review"
+  | "followup_activity"
   | "referral_created"
   | "referral_status_updated"
   | "clinician_handoff"
