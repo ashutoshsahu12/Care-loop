@@ -53,8 +53,8 @@ let stage = 'start';
   const has = (page,text) => page.getByText(text,{exact:false}).first().waitFor();
   try {
     if (sharedPage) {
-      step('Judge walkthrough opens directly and calculates metrics from the seed');
-      await go(sharedPage, '/judge-demo');
+      step('Care walkthrough opens directly and calculates metrics from the seed');
+      await go(sharedPage, '/walkthrough');
       await sharedPage.getByRole('heading', { name: 'Closing the screening-to-care loop' }).waitFor();
       await has(sharedPage, '2 of 12');
       await sharedPage.getByRole('link', { name: 'Open as care coordinator' }).click();
@@ -178,11 +178,11 @@ let stage = 'start';
       if (path === '/care-escalations') await has(admin, 'CL-P-1006');
     }
     if (sharedPage) {
-      step('Judge metrics reflect the completed workflow and reset restores the seed');
-      await go(sharedPage, '/judge-demo');
+      step('Cohort metrics reflect the completed workflow and reset restores the seed');
+      await go(sharedPage, '/walkthrough');
       await has(sharedPage, '3 of 14');
       const independent = await createPage();
-      await go(independent, '/judge-demo');
+      await go(independent, '/walkthrough');
       await has(independent, '2 of 12');
       sharedPage.once('dialog', dialog => void dialog.accept());
       await btn(sharedPage, 'Reset synthetic cases').click();

@@ -1,10 +1,10 @@
-# CARELOOP judge demo
+# CARELOOP care walkthrough
 
 CARELOOP addresses the screening-to-care gap. A result becomes an assigned case with a next step, deadlines, and a timeline. A referral can stall after it is sent. A missed visit can require outreach. Completion requires an authorized clinical outcome and evidence.
 
 ## Watch one case move
 
-Open `/judge-demo` on the deployed app. Stay in the same tab as you switch roles. To start from the original 12 fictional cases, use **Reset synthetic cases**.
+Open `/walkthrough` on the deployed app. Stay in the same tab as you switch roles. To start from the original 12 fictional cases, use **Reset synthetic cases**.
 
 | Role | What to show | What to verify |
 | --- | --- | --- |
@@ -30,4 +30,4 @@ Start with a screening program at one clinic, one coordinator, and one receiving
 | Time to consultation | Elapsed time from screening to first attended consultation, reported as a median among eligible cases |
 | Attendance | Attended visits divided by visits marked attended or missed |
 
-The judge page calculates figures from the synthetic demo records. The pilot would establish operational benefit and assess the coordinator’s workload before a wider rollout.
+The walkthrough calculates figures from the synthetic demo records. The pilot would establish operational benefit and assess the coordinator’s workload before a wider rollout.

@@ -13,6 +13,6 @@ export const demoFetch: typeof fetch = async (input, init) => {
   if (url.origin !== window.location.origin || !url.pathname.startsWith("/api/")) {
     throw new Error("The browser demo only handles CARELOOP API requests.");
   }
-  const { runBrowserRequest } = await import("../judge/browserDatabase");
+  const { runBrowserRequest } = await import("../demo/browserDatabase");
   return runBrowserRequest(request);
 };

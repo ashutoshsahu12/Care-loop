@@ -4,9 +4,9 @@ A comprehensive healthcare coordination platform designed to ensure that no pati
 
 ---
 
-## Judge demo and Vercel
+## Care walkthrough and Vercel
 
-Start at `/judge-demo` for the four-role walkthrough, synthetic cohort metrics, and a [verification and pilot guide](docs/judge-demo.md). The Vercel build runs the existing CARELOOP workflow in the browser. Use the role links in one tab to work on the same cases, and use the reset control to restore the fixture.
+Start at `/walkthrough` for the four-role walkthrough, synthetic cohort metrics, and a [verification and pilot guide](docs/walkthrough.md). The Vercel build runs the existing CARELOOP workflow in the browser. Use the role links in one tab to work on the same cases, and use the reset control to restore the fixture.
 
 Import this repository into Vercel with the **repository root** as the Root Directory. The root `vercel.json` specifies installation, the build, output, and deep-link handling. The browser demo uses Node.js 22 at build time and requires no environment variables or hosted database.
 
