@@ -2,7 +2,7 @@ import { api, isDemoMode } from "./api";
 import { DEMO_PATIENT_ID, patients, screenings } from "../mocks/data";
 import { recordDemoCaseEvent } from "../mocks/caseEvents";
 import type { Role, Screening } from "../types";
-import { BACKEND_DEMO_PATIENT_REF, findDetailByPatientRef, getAllBackendPatients, getAllCaseDetails, getCaseDetails, toScreening, visibleCaseDetails } from "./backendBridge";
+import { findDetailByPatientRef, getAllBackendPatients, getAllCaseDetails, getCaseDetails, toScreening, visibleCaseDetails } from "./backendBridge";
 export const screeningService = {
   async list(role?: Role, patientId?: string): Promise<Screening[]> {
     if (!isDemoMode) {
