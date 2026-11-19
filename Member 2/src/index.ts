@@ -1,5 +1,6 @@
 export * from "./types";
 export * from "./db/client";
+export * from "./db/localDb";
 export * from "./validation/schemas";
 export * from "./rules/stateMachine";
 export * from "./rules/triageRules";

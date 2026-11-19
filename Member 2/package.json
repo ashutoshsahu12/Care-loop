@@ -4,8 +4,8 @@
   "description": "CARELOOP Member 2 - Backend & Care Coordination Workflows",
   "type": "module",
   "scripts": {
-    "dev": "node dist/server.js",
-    "build": "tsc --noEmit && esbuild src/server.ts --bundle --outfile=dist/server.js --format=esm --target=node20 --packages=external && esbuild src/worker.ts --bundle --outfile=dist/worker.js --format=esm --target=node20 --packages=external",
+    "dev": "npm run build && node dist/server.js",
+    "build": "tsc --noEmit && npm exec -- esbuild src/server.ts --bundle --outfile=dist/server.js --format=esm --target=node22 --packages=external && npm exec -- esbuild src/worker.ts --bundle --outfile=dist/worker.js --format=esm --target=node22 --packages=external",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "start": "node dist/server.js"
