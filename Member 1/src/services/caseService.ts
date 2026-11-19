@@ -3,6 +3,7 @@ import { demoCaseEvents, appendDemoCaseEvent } from "../mocks/caseEvents";
 import { DEMO_PATIENT_ID, appointments, followUps, notifications, patients, screenings } from "../mocks/data";
 import { demoReferrals } from "./referralService";
 import type { CaseTimelineEvent, PatientCase } from "../types";
+import { BACKEND_DEMO_PATIENT_REF, getCaseDetails, getPatientSummary, toEvent, toPatientCase } from "./backendBridge";
 
 function getDemoCase(patientId?: string): PatientCase | undefined {
   if (patientId !== DEMO_PATIENT_ID) return undefined;
@@ -38,15 +39,17 @@ function requireDemoPatientCase(caseId: string, patientId: string): PatientCase 
 export const caseService = {
   async getMyCase(patientId?: string): Promise<PatientCase | undefined> {
     if (!isDemoMode) {
-      const { data } = await api.get<PatientCase[]>("/patient/cases");
-      return data[0];
+      const summary = await getPatientSummary(patientId || BACKEND_DEMO_PATIENT_REF);
+      if (!summary.activeCase) return undefined;
+      return toPatientCase(await getCaseDetails(summary.activeCase.id));
     }
     return getDemoCase(patientId);
   },
 
   async getTimeline(caseId: string, patientId?: string): Promise<CaseTimelineEvent[]> {
     if (!isDemoMode) {
-      return (await api.get<CaseTimelineEvent[]>(`/cases/${encodeURIComponent(caseId)}/timeline`)).data;
+      const events = (await api.get<import("./backendBridge").BackendEvent[]>(`/cases/${encodeURIComponent(caseId)}/timeline`)).data;
+      return events.map(event => toEvent(event, patientId || BACKEND_DEMO_PATIENT_REF));
     }
     requireDemoPatientCase(caseId, patientId || "");
     return demoCaseEvents
@@ -57,7 +60,14 @@ export const caseService = {
 
   async acknowledge(caseId: string, patientId: string): Promise<CaseTimelineEvent> {
     if (!isDemoMode) {
-      return (await api.post<CaseTimelineEvent>(`/cases/${encodeURIComponent(caseId)}/acknowledge`)).data;
+      const summary = await getPatientSummary(patientId);
+      const notification = summary.unreadNotifications.find(item => item.caseId === caseId && item.status !== "acknowledged");
+      if (!notification) throw new Error("No pending notification exists for this care case.");
+      await api.post(`/notifications/${encodeURIComponent(notification.id)}/acknowledge`, {});
+      const timeline = await caseService.getTimeline(caseId, patientId);
+      const event = [...timeline].reverse().find(item => item.eventType === "patient_acknowledged");
+      if (!event) throw new Error("Acknowledgement recorded, but the timeline has not updated yet.");
+      return event;
     }
     requireDemoPatientCase(caseId, patientId);
     const notification = notifications.find((item) => item.caseId === caseId && item.patientId === patientId);
