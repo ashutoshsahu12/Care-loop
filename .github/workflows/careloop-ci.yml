@@ -73,7 +73,11 @@ jobs:
       - name: Install browser test runner
         run: |
           npm install --prefix "$RUNNER_TEMP/careloop-browser" playwright@1.56.1
-          "$RUNNER_TEMP/careloop-browser/node_modules/.bin/playwright" install --with-deps chromium --only-shell
+          if browser=$(command -v google-chrome || command -v chromium); then
+            printf 'CARELOOP_CHROMIUM=%s\n' "$browser" >> "$GITHUB_ENV"
+          else
+            "$RUNNER_TEMP/careloop-browser/node_modules/.bin/playwright" install --with-deps chromium --only-shell
+          fi
       - name: Walk through the connected demo in Chromium
         run: |
           (cd 'Member 2' && DATABASE_PATH=:memory: exec node dist/server.js) > "$RUNNER_TEMP/careloop-api.log" 2>&1 &
