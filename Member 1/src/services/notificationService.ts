@@ -19,7 +19,7 @@ export const notificationService = {
   async list(role?: Role, patientId?: string): Promise<CareNotification[]> {
     if (!isDemoMode) {
       const raw = role === "patient"
-        ? (await getPatientSummary(patientId || BACKEND_DEMO_PATIENT_REF)).unreadNotifications.map(item => ({ ...item, acknowledgedAt: undefined }))
+        ? (await getPatientSummary(patientId || BACKEND_DEMO_PATIENT_REF)).unreadNotifications
         : (await Promise.all(visibleCaseDetails(await getAllCaseDetails(), role, patientId).map(async detail =>
             (await api.get<BackendNotification[]>(`/cases/${encodeURIComponent(detail.caseRecord.id)}/notifications`)).data
           ))).flat();
