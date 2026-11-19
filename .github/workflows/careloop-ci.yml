@@ -54,7 +54,7 @@ jobs:
       - run: npm test
         working-directory: 'Member 2'
   browser:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -73,7 +73,7 @@ jobs:
       - name: Install browser test runner
         run: |
           npm install --prefix "$RUNNER_TEMP/careloop-browser" playwright@1.56.1
-          "$RUNNER_TEMP/careloop-browser/node_modules/.bin/playwright" install --with-deps chromium
+          "$RUNNER_TEMP/careloop-browser/node_modules/.bin/playwright" install --with-deps chromium --only-shell
       - name: Walk through the connected demo in Chromium
         run: |
           (cd 'Member 2' && DATABASE_PATH=:memory: exec node dist/server.js) > "$RUNNER_TEMP/careloop-api.log" 2>&1 &
