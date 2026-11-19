@@ -8,13 +8,19 @@ let stage = 'start';
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CARELOOP_CHROMIUM });
   const faults = [];
+  const writes = [];
   const screens = [];
   const step = (label) => { stage = label; process.stdout.write(label+'\n'); };
   const login = async (role, label) => {
     const page = await browser.newPage();
     page.setDefaultTimeout(9000);
     page.on('pageerror', error => faults.push(error.message));
-    page.on('response', response => {if (response.url().includes(':8787/') && response.status() >= 400) faults.push(response.status()+' '+response.url());});
+    page.on('response', response => {
+      if (!response.url().includes(':8787/')) return;
+      const method = response.request().method();
+      if (method === 'POST' || method === 'PATCH') writes.push(`${role} ${method} ${response.status()} ${response.url()}`);
+      if (response.status() >= 400) faults.push(`${response.status()} ${response.url()}`);
+    });
     screens.push(page);
     await page.goto(root+'/login');
     await page.getByRole('button',{name:label}).click();
@@ -74,7 +80,7 @@ let stage = 'start';
     const referral = (page) => page.getByRole('row').filter({hasText:'Browser Test Clinic'});
     await referral(doctor).getByRole('button',{name:/Update referral/}).click();
     await lbl(doctor,'Referral progress').selectOption('Accepted');
-    await btn(doctor,'Update referral').click();
+    await doctor.getByRole('dialog', { name: 'Update referral' }).getByRole('button', { name: 'Update referral' }).click();
     await referral(doctor).getByText('Accepted',{exact:true}).waitFor();
     step('Care worker schedules a referral-linked visit and records attendance');
     await go(worker,'/appointments');
@@ -115,9 +121,12 @@ let stage = 'start';
     await patient.getByText('Closed',{exact:true}).first().waitFor();
     await has(patient,'Browser Test Clinic');
     await go(patient,'/notifications');
-    const update = patient.locator('.notification-item').filter({hasText:'Screening Summary Available'});
-    await update.getByRole('button',{name:'Acknowledge',exact:true}).click();
-    await update.getByRole('button',{name:'Acknowledged',exact:true}).waitFor();
+    const oldUpdate = patient.locator('.notification-item').filter({hasText:'Your cardiovascular screening summary is ready for review.'});
+    const newUpdate = patient.locator('.notification-item').filter({hasText:'Your Cardiovascular / blood pressure screening has been processed'});
+    await oldUpdate.getByRole('button',{name:'Acknowledge',exact:true}).click();
+    await oldUpdate.getByRole('button',{name:'Acknowledged',exact:true}).waitFor();
+    await newUpdate.getByRole('button',{name:'Acknowledge',exact:true}).click();
+    await newUpdate.getByRole('button',{name:'Acknowledged',exact:true}).waitFor();
     step('Administrator sees the new case and connected admin screens');
     const admin = await login('admin',/Administrator/);
     await go(admin,'/care-cases');
@@ -131,7 +140,7 @@ let stage = 'start';
     assert.deepEqual(faults,[]);
     console.log('Four-role browser walkthrough passed');
   } catch (error) {
-    console.error(stage, error.message, faults);
+    console.error(stage, error.message, { faults, writes });
     for (const page of screens) console.error(page.url(), (await page.locator('body').innerText().catch(()=>'')).slice(-1800));
     process.exitCode=1;
   } finally {await browser.close();}

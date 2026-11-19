@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { X } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -26,11 +26,12 @@ export function EmptyState({ title, description }: { title: string; description:
 }
 
 export function Modal({ title, description, onClose, children, wide = false }: { title: string; description?: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
+  const headingId = useId();
   const [closing, setClosing] = useState(false);
   const close = () => { if (!closing) { setClosing(true); onClose(); } };
   return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
-    <div className={`modal ${wide ? "modal-wide" : ""}`}>
-      <div className="modal-heading"><div><h2>{title}</h2>{description && <p>{description}</p>}</div><button className="icon-btn" onClick={close} aria-label="Close dialog"><X size={18} /></button></div>
+    <div className={`modal ${wide ? "modal-wide" : ""}`} role="dialog" aria-modal="true" aria-labelledby={headingId}>
+      <div className="modal-heading"><div><h2 id={headingId}>{title}</h2>{description && <p>{description}</p>}</div><button className="icon-btn" onClick={close} aria-label="Close dialog"><X size={18} /></button></div>
       {children}
     </div>
   </div>;

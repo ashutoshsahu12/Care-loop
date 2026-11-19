@@ -11,7 +11,7 @@ export interface BackendCase {
 }
 export interface BackendPatient {
   id: string; patientReference: string; name: string; dateOfBirth?: string;
-  gender?: string | null; phone?: string | null; email?: string | null; address?: string | null;
+  gender?: string | null; phone?: string | null; email?: string | null; address?: string | null; createdAt?: string;
 }
 export interface BackendScreening {
   id: string; screeningType: string; resultValue: string; createdAt: string;
@@ -90,7 +90,7 @@ export function toUnscreenedPatient(patient: BackendPatient): Patient {
     screening: "Not yet screened", result: "Awaiting screening",
     status: "In progress", priority: "Routine", doctor: "Unassigned",
     coordinator: "Unassigned", lastActivity: "New registration",
-    nextAction: "Record screening",
+    nextAction: "Record screening", registeredAt: patient.createdAt,
   };
 }
 export async function getAllBackendPatients(): Promise<BackendPatient[]> {
@@ -112,7 +112,8 @@ export function toPatient(detail: BackendCaseDetail): Patient {
     status: displayStatus(c.status), priority: displayPriority(c.priority),
     doctor: DEMO_CLINICIAN_NAMES[detail.referrals.find(referral => referral.handoffClinicianId)?.handoffClinicianId ?? s?.submittedById ?? ""] ?? "Care team", coordinator: c.assignedCareWorkerName || "Unassigned",
     lastActivity: dateLabel(c.lastActivityAt), nextAction: c.nextAction,
-    caseId: c.id, dueAt: c.dueAt, screeningDate: dateLabel(s?.createdAt),
+    caseId: c.id, dueAt: c.dueAt, screeningDate: s?.createdAt,
+    screeningStatus: toScreening(detail)?.status, reviewState: s?.status.replace(/_/g, " "), registeredAt: patient.createdAt,
     priorityReason: "Priority assigned by the care-coordination workflow.",
     clinicalNotes: detail.timeline.filter(event => event.eventType === "clinical_review").map(event => ({
       id: event.id, text: event.summary, createdAt: dateLabel(event.createdAt),
@@ -164,7 +165,7 @@ export function toReferral(d: BackendCaseDetail, r: BackendReferral): Referral {
 export function toAppointment(d: BackendCaseDetail, a: BackendAppointment): Appointment {
   return {
     id: a.id, patient: d.patient.name, patientId: d.patient.patientReference,
-    initials: initials(d.patient.name), type: a.facility, date: dateLabel(a.scheduledTime),
+    initials: initials(d.patient.name), type: a.facility, scheduledAt: a.scheduledTime, date: dateLabel(a.scheduledTime),
     time: new Date(a.scheduledTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
     clinician: a.providerName,
     status: a.status === "attended" ? "Completed"

@@ -26,7 +26,7 @@ export const appointmentService = {
     }
     return appointments;
   },
-  async request(patient: string, date: string, type: string, patientId?: string, caseId?: string, referralId?: string): Promise<void> {
+  async request(patient: string, date: string, type: string, patientId?: string, caseId?: string, details?: { referralId?: string; facility?: string; provider?: string }): Promise<void> {
     if (!isDemoMode) {
       const detail = caseId ? undefined : patientId ? await findDetailByPatientRef(patientId)
         : (await getAllCaseDetails()).find(item => item.patient.name === patient);
@@ -41,7 +41,10 @@ export const appointmentService = {
         return;
       }
       await api.post(`/cases/${encodeURIComponent(targetCase)}/appointments`, {
-        scheduledTime: selectedDate, facility: "CARELOOP Demo Clinic", providerName: "Care team", referralId,
+        scheduledTime: selectedDate,
+        facility: details?.facility || "CARELOOP Demo Clinic",
+        providerName: details?.provider || "Care team",
+        referralId: details?.referralId,
       });
       return;
     }

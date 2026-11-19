@@ -2,7 +2,7 @@ import { api, isDemoMode } from "./api";
 import { DEMO_PATIENT_ID, patients } from "../mocks/data";
 import { recordDemoCaseEvent } from "../mocks/caseEvents";
 import type { CaseStatus, Patient, Role } from "../types";
-import { BACKEND_DEMO_PATIENT_REF, DEMO_WORKER_NAMES, backendStatus, findDetailByPatientRef, getAllBackendPatients, getAllCaseDetails, getCaseDetails, getBackendPatient, toPatient, toUnscreenedPatient, latestVisibleCases, unscreenedRegistrations } from "./backendBridge";
+import { BACKEND_DEMO_PATIENT_REF, DEMO_WORKER_NAMES, backendStatus, findDetailByPatientRef, getAllBackendPatients, getAllCaseDetails, getCaseDetails, getBackendPatient, getPatientSummary, toPatient, toUnscreenedPatient, latestVisibleCases, unscreenedRegistrations } from "./backendBridge";
 
 const delay = () => new Promise((resolve) => window.setTimeout(resolve, 180));
 export const patientService = {
@@ -50,10 +50,10 @@ export const patientService = {
     if (role === "patient" && (patientId !== DEMO_PATIENT_ID || patient.id !== patientId)) return undefined;
     return patient;
   },
-  async getMyProfile(userId: string): Promise<Patient | undefined> {
+  async getMyProfile(userId: string, patientRef?: string): Promise<Patient | undefined> {
     if (!isDemoMode) {
-      const detail = await findDetailByPatientRef(BACKEND_DEMO_PATIENT_REF);
-      return detail ? toPatient(detail) : undefined;
+      const summary = await getPatientSummary(patientRef || BACKEND_DEMO_PATIENT_REF);
+      return summary.activeCase ? toPatient(await getCaseDetails(summary.activeCase.id)) : toUnscreenedPatient(summary.patient);
     }
     await delay();
     return userId === "U-004" ? patients.find((patient) => patient.id === "CL-2048") : undefined;

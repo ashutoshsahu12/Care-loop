@@ -146,7 +146,7 @@ export class AppRouter {
       if (method === "GET" && path === "/api/patients") {
         this.authService.checkPermission(user, ["admin", "clinician", "care_worker"]);
         const rows = await this.db.prepare(
-          "SELECT id, patient_reference as patientReference, name, date_of_birth as dateOfBirth, gender, phone, email, address FROM patients ORDER BY created_at DESC"
+          "SELECT id, patient_reference as patientReference, name, date_of_birth as dateOfBirth, gender, phone, email, address, created_at as createdAt FROM patients ORDER BY created_at DESC"
         ).all();
         return jsonResponse(rows.results);
       }
@@ -154,7 +154,7 @@ export class AppRouter {
       const patientMatch = path.match(/^\/api\/patients\/([^/]+)$/);
       if (method === "GET" && patientMatch) {
         const patient = await this.db.prepare(
-          "SELECT id, patient_reference as patientReference, name, date_of_birth as dateOfBirth, gender, phone, email, address FROM patients WHERE id = ? OR patient_reference = ?"
+          "SELECT id, patient_reference as patientReference, name, date_of_birth as dateOfBirth, gender, phone, email, address, created_at as createdAt FROM patients WHERE id = ? OR patient_reference = ?"
         ).bind(patientMatch[1], patientMatch[1]).first<{ email: string | null }>();
         if (patient && user.role === "patient" && patient.email !== user.email) {
           throw new Error("Forbidden: You can only view your own demo patient profile.");
@@ -174,7 +174,7 @@ export class AppRouter {
           "INSERT INTO patients (id, patient_reference, name, date_of_birth, gender, phone, email, address, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         ).bind(id, patientReference, input.name, dateOfBirth, input.gender, input.phone, input.email, "Demo care network", now, now).run();
         return jsonResponse({ id, patientReference, name: input.name, dateOfBirth,
-          gender: input.gender, phone: input.phone, email: input.email, address: "Demo care network" }, 201);
+          gender: input.gender, phone: input.phone, email: input.email, address: "Demo care network", createdAt: now }, 201);
       }
 
       // GET /api/team — read-only directory of seeded demo care team users.
