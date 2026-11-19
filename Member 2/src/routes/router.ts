@@ -22,6 +22,7 @@ import {
   ReferralStatusUpdateSchema,
   ScreeningSubmissionSchema,
   VerifiedClosureSchema,
+  PatientCreateSchema,
 } from "../validation/schemas";
 import { ZodError } from "zod";
 
@@ -86,6 +87,38 @@ export class AppRouter {
 
     try {
       const user = await this.authService.resolveUser(request);
+
+      // Synthetic patient registration and retrieval for Member 1 care-worker onboarding.
+      if (method === "GET" && path === "/api/patients") {
+        this.authService.checkPermission(user, ["admin", "clinician", "care_worker"]);
+        const rows = await this.db.prepare(
+          "SELECT id, patient_reference as patientReference, name, date_of_birth as dateOfBirth, gender, phone, email, address FROM patients ORDER BY created_at DESC"
+        ).all();
+        return jsonResponse(rows.results);
+      }
+
+      const patientMatch = path.match(/^\/api\/patients\/([^/]+)$/);
+      if (method === "GET" && patientMatch) {
+        const patient = await this.db.prepare(
+          "SELECT id, patient_reference as patientReference, name, date_of_birth as dateOfBirth, gender, phone, email, address FROM patients WHERE id = ? OR patient_reference = ?"
+        ).bind(patientMatch[1], patientMatch[1]).first();
+        return patient ? jsonResponse(patient) : jsonResponse({ message: "Patient not found" }, 404);
+      }
+
+      if (method === "POST" && path === "/api/patients") {
+        this.authService.checkPermission(user, ["admin", "clinician", "care_worker"]);
+        const input = PatientCreateSchema.parse(await request.json());
+        const now = new Date().toISOString();
+        const suffix = `${Date.now()}${Math.floor(Math.random() * 10000).toString().padStart(4, "0")}`;
+        const id = `pat-${suffix}`;
+        const patientReference = `CL-P-${suffix}`;
+        const dateOfBirth = `${new Date().getUTCFullYear() - input.age}-01-01`;
+        await this.db.prepare(
+          "INSERT INTO patients (id, patient_reference, name, date_of_birth, gender, phone, email, address, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        ).bind(id, patientReference, input.name, dateOfBirth, input.gender, input.phone, input.email, "Demo care network", now, now).run();
+        return jsonResponse({ id, patientReference, name: input.name, dateOfBirth,
+          gender: input.gender, phone: input.phone, email: input.email, address: "Demo care network" }, 201);
+      }
 
       // --- Member 3 Admin Endpoints ---
 
