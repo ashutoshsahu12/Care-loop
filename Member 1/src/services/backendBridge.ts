@@ -182,9 +182,38 @@ export function toEvent(e: BackendEvent, patientReference: string): CaseTimeline
 export async function getCaseDetails(caseId: string): Promise<BackendCaseDetail> {
   return (await api.get<BackendCaseDetail>(`/cases/${encodeURIComponent(caseId)}`)).data;
 }
-export async function getAllCaseDetails(): Promise<BackendCaseDetail[]> {
-  const rows = (await api.get<Array<{ id: string }>>("/cases")).data;
-  return Promise.all(rows.map(row => getCaseDetails(row.id)));
+// Share a short-lived in-flight snapshot among patient, referral, task and appointment
+// list requests. Never reuse another demo user's snapshot, and invalidate on mutations.
+let caseSnapshot: {
+  identity: string; expiresAt: number; promise: Promise<BackendCaseDetail[]>;
+} | null = null;
+
+export function invalidateCaseDetailsCache(): void {
+  caseSnapshot = null;
+}
+
+api.interceptors.response.use(response => {
+  const method = response.config.method?.toLowerCase();
+  if (method && !["get", "head", "options"].includes(method)) invalidateCaseDetailsCache();
+  return response;
+});
+
+export function getAllCaseDetails(): Promise<BackendCaseDetail[]> {
+  const identity = typeof localStorage === "undefined"
+    ? "server" : (localStorage.getItem("careloop.accessToken") ?? "anonymous");
+  if (caseSnapshot && caseSnapshot.identity === identity && caseSnapshot.expiresAt > Date.now()) {
+    return caseSnapshot.promise;
+  }
+  const promise = (async () => {
+    const rows = (await api.get<Array<{ id: string }>>("/cases")).data;
+    return Promise.all(rows.map(row => getCaseDetails(row.id)));
+  })();
+  const snapshot = { identity, expiresAt: Date.now() + 1200, promise };
+  caseSnapshot = snapshot;
+  void promise.catch(() => {
+    if (caseSnapshot === snapshot) caseSnapshot = null;
+  });
+  return promise;
 }
 export async function getPatientSummary(patientRef = BACKEND_DEMO_PATIENT_REF): Promise<BackendPatientSummary> {
   return (await api.get<BackendPatientSummary>("/patient/summary", { params: { patientId: patientRef } })).data;
