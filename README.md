@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # CARELOOP — Closing the Screening-to-Care Loop
 
 A comprehensive healthcare coordination platform designed to ensure that no patient screening result is lost to follow-up. CARELOOP tracks patients from initial screening through specialist referrals, appointment scheduling, attendance, and verified clinical closure.
@@ -61,3 +62,59 @@ VITE_CARELOOP_API_URL=http://localhost:8787
 2. **Deterministic Triage & Clinical Disclaimers:** Priority and target time-to-care SLA calculations are transparent and deterministic. No automated medical diagnoses or treatment recommendations are made. Ambiguous or urgent results route directly to qualified clinical review.
 3. **Verified Closure Invariant:** Referral creation or appointment attendance alone does not close a case. Verified closure strictly requires an authorized clinician or administrator, documented clinical outcome, and evidence notes.
 4. **Immutable Audit Trails:** Every important state mutation records an append-only event in the case timeline.
+=======
+# CARELOOP frontend
+
+CARELOOP is a responsive React, Vite, and TypeScript prototype for coordinating a synthetic screening case through notification, patient acknowledgment, referral, appointment, follow-up, clinical review, and verified closure.
+
+## Run locally
+
+```powershell
+npm install
+npm run dev
+```
+
+Open the URL Vite prints (usually `http://localhost:5173`). Run `npm run build` to type-check and create a production build; run `npm test` for the focused patient-data and case-history tests.
+
+## Demo access
+
+Open **Sign in**, choose a role, and enter any password. Demo credentials and mock responses are explicitly enabled only when `VITE_API_BASE_URL` is unset. The demo has no public self-registration and does not create real accounts. Demo users:
+
+| Role | Email |
+| --- | --- |
+| Administrator | `admin@careloop.demo` |
+| Doctor | `doctor@careloop.demo` |
+| Care coordinator | `worker@careloop.demo` |
+| Patient | `patient@careloop.demo` |
+
+No demo passwords are embedded or persisted. The patient role is linked to one synthetic case (`CL-2048`). The portal only presents that patient's scoped case information and omits internal clinical notes. Patient notifications can be acknowledged once; acknowledgment is recorded as a separate case-history event. Help requests stay in the in-app workflow.
+
+All demo records and dashboard/analytics figures are synthetic and illustrative. The mock service layer keeps mutations in memory; they reset when the page is reloaded and are not a durable source of truth. Do not enter real patient information.
+
+## API configuration
+
+Copy `.env.example` to `.env.local` and set `VITE_API_BASE_URL` to the backend base URL, for example `http://localhost:8000/api`. The API client adds the access token as a bearer token and reports API errors rather than silently switching to mock responses. The service layer is in `src/services/`; synthetic records and recorded demo case events are in `src/mocks/`.
+
+The patient case service expects `GET /patient/cases`, `GET /cases/:id/timeline`, `POST /cases/:id/acknowledge`, and `POST /cases/:id/help-requests`. Case closure uses `POST /cases/:id/closure` with an outcome and evidence note. These paths must be agreed with and implemented by the API owner; the frontend does not transition production case status or authorize access.
+
+The backend must enforce authentication, role permissions, and patient-level authorization independently of frontend route guards. The frontend role guards are for navigation and UX only.
+
+## Care closure
+
+Sending or acknowledging a notification, creating a referral, scheduling an appointment, or completing a follow-up does not close a case. The staff closure action requires an explicit confirmation and a written evidence note; the mock records the outcome, verifying actor, timestamp, and timeline event. A production backend must enforce authorized verification, persist the evidence, and return the verified-closure record before the UI presents the case as closed.
+
+## Simulated KPI definitions
+
+The current admin charts are illustrative and are **not computed from the demo patient list or a live database**. For API integration, the specification defines:
+
+| KPI | Definition |
+| --- | --- |
+| Notification acknowledgment rate | Acknowledged in-app notifications ÷ notifications issued. |
+| Referral completion rate | Referrals marked completed ÷ referrals created; define cancelled/rejected treatment consistently. |
+| Appointment attendance rate | Appointments attended ÷ appointments due with a recorded attendance outcome. |
+| Average time to consultation | Elapsed time from screening record to consultation timestamp, averaged across eligible cases. |
+| Overdue case count | Open cases whose required next-action due date has passed. |
+| Verified closure rate | Cases with authorized verification ÷ cases eligible for closure. |
+
+Use database/API aggregates for production metrics and make numerator/denominator rules visible. Do not treat the sample figures as operational results.
+>>>>>>> 61338a4 (Initial Commit)
