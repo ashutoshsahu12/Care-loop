@@ -101,7 +101,7 @@ export function toScreening(detail: BackendCaseDetail): Screening | null {
     id: s.id, patient: detail.patient.name, patientId: detail.patient.patientReference,
     initials: initials(detail.patient.name), type: s.screeningType,
     date: dateLabel(s.createdAt), recordedAt: s.createdAt, result: s.resultValue,
-    status: s.status === "reviewed" ? "Normal" : "Abnormal", clinician: "Care team",
+    status: /\\b(normal|negative|within range)\\b/i.test(s.resultValue) && !/abnormal|positive|high|suspicious/i.test(s.resultValue) ? "Normal" : "Abnormal", clinician: "Care team",
     reviewState: s.status.replace(/_/g, " "),
   };
 }
