@@ -2,7 +2,10 @@ import http from "node:http";
 import worker from "./worker";
 import { createTestOrLocalDb } from "./db/localDb";
 
-const localDb = createTestOrLocalDb({ seed: true });
+// Reuse the same seeded synthetic records across local backend restarts.
+// Set DATABASE_PATH=:memory: when a disposable demo session is preferred.
+const databasePath = process.env.DATABASE_PATH || "careloop-local.sqlite";
+const localDb = createTestOrLocalDb({ seed: true, path: databasePath });
 
 const PORT = Number(process.env.PORT || 8787);
 
