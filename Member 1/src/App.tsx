@@ -15,6 +15,7 @@ import {
 } from "recharts";
 import { appointments as demoAppointments, chartData, distributionData } from "./mocks/data";
 import { appointmentService } from "./services/appointmentService";
+import { isDemoMode } from "./services/api";
 import { authService, demoUsers } from "./services/authService";
 import { caseService } from "./services/caseService";
 import { followupService } from "./services/followupService";
@@ -633,7 +634,7 @@ function CreateScreeningModal({ onClose, onCreated }: { onClose: () => void; onC
   return <Modal title="Add screening record" description="Enter the screening result and connect it to the patient’s care journey." onClose={onClose}>
     <form className="form-stack modal-form" onSubmit={(event) => { event.preventDefault(); if (!patient || !type || result.trim().length < 3) { setError("Select a patient and screening type, then enter the result summary."); return; } if (report && report.size > 10 * 1024 * 1024) { setError("The report must be smaller than 10 MB."); return; } setError(""); mutation.mutate({ patient: patient.split(" · ")[0], patientId: patient.split(" · ")[1], type, result: result.trim(), report }); }}>
       <Field label="Patient"><select value={patient} onChange={(event) => setPatient(event.target.value)}><option value="">Select a patient</option>{(patientQuery.data || []).map((p) => <option key={p.id} value={`${p.name} · ${p.id}`}>{p.name} · {p.id}</option>)}</select></Field>
-      <Field label="Screening type"><select value={type} onChange={(event) => setType(event.target.value)}><option value="">Select screening type</option><option>Mammogram</option><option>Colorectal FIT</option><option>Cervical screening</option><option>Lung CT</option></select></Field>
+      <Field label="Screening type"><select value={type} onChange={(event) => setType(event.target.value)}><option value="">Select screening type</option><option>Mammogram</option><option>Colorectal FIT</option><option>Cervical screening</option><option>Lung CT</option><option>Cardiovascular / blood pressure</option></select></Field>
       <Field label="Result summary"><input value={result} onChange={(event) => setResult(event.target.value)} placeholder="e.g. BI-RADS 4 · Suspicious finding" /></Field>
       <label className="upload-zone"><FilePlus2 size={21} /><b>{report?.name || "Attach screening report"}</b><small>PDF or image · up to 10 MB</small><input type="file" accept=".pdf,image/*" onChange={(event) => setReport(event.target.files?.[0])} /></label>
       {report && report.size > 10 * 1024 * 1024 && <div className="form-error">The report must be smaller than 10 MB.</div>}
@@ -698,14 +699,15 @@ function CreateFollowUpModal({ onClose, onCreated }: { onClose: () => void; onCr
   const [patient, setPatient] = useState("");
   const [reason, setReason] = useState("");
   const [due, setDue] = useState("");
-  const [owner, setOwner] = useState("Jordan Lee");
+  const [owner, setOwner] = useState(isDemoMode ? "Jordan Lee" : "A. Sharma");
   const [error, setError] = useState("");
   const mutation = useMutation({ mutationFn: followupService.create, onSuccess: onCreated, onError: (issue) => setError(issue instanceof Error ? issue.message : "Could not create follow-up.") });
   return <Modal title="Create follow-up" description="Assign a clear next step and due date to keep a patient’s care moving." onClose={onClose}>
-    <form className="form-stack modal-form" onSubmit={(event) => { event.preventDefault(); if (!patient || reason.trim().length < 3 || !due || !owner) { setError("Complete each field before adding the follow-up."); return; } setError(""); mutation.mutate({ patient: patient.split(" · ")[0], patientId: patient.split(" · ")[1], reason: reason.trim(), due: new Date(`${due}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" }), owner }); }}>
+    <form className="form-stack modal-form" onSubmit={(event) => { event.preventDefault(); if (!patient || reason.trim().length < 3 || !due || !owner) { setError("Complete each field before adding the follow-up."); return; } setError(""); mutation.mutate({ patient: patient.split(" · ")[0], patientId: patient.split(" · ")[1], reason: reason.trim(), due: isDemoMode ? new Date(`${due}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : due, owner }); }}>
       <Field label="Patient"><select value={patient} onChange={(event) => setPatient(event.target.value)}><option value="">Select a patient</option>{(patientsQuery.data || []).map((p) => <option key={p.id} value={`${p.name} · ${p.id}`}>{p.name} · {p.id}</option>)}</select></Field>
       <Field label="Follow-up action"><input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="e.g. Confirm diagnostic appointment" /></Field>
-      <div className="form-row"><Field label="Due date"><input type="date" min={new Date().toISOString().slice(0, 10)} value={due} onChange={(event) => setDue(event.target.value)} /></Field><Field label="Assigned to"><select value={owner} onChange={(event) => setOwner(event.target.value)}><option>Jordan Lee</option><option>Sam Rivera</option><option>Alex Morgan</option></select></Field></div>
+      <div className="form-row"><Field label="Due date"><input type="date" min={new Date().toISOString().slice(0, 10)} value={due} onChange={(event) => setDue(event.target.value)} /></Field><Field label="Assigned to"><select value={owner} onChange={(event) => setOwner(event.target.value)}>{isDemoMode ? <><option>Jordan Lee</option><option>Sam Rivera</option><option>Alex Morgan</option></> :
+        <><option>A. Sharma</option><option>R. Kumar</option><option>S. Iyer</option><option>M. Das</option></>}</select></Field></div>
       {error && <div className="form-error">{error}</div>}<div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={mutation.isPending}>{mutation.isPending ? "Adding…" : "Add follow-up"} <ArrowRight size={15} /></button></div>
     </form>
   </Modal>;
