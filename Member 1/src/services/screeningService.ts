@@ -2,7 +2,7 @@ import { api, isDemoMode } from "./api";
 import { DEMO_PATIENT_ID, patients, screenings } from "../mocks/data";
 import { recordDemoCaseEvent } from "../mocks/caseEvents";
 import type { Role, Screening } from "../types";
-import { BACKEND_DEMO_PATIENT_REF, findDetailByPatientRef, getAllCaseDetails, getCaseDetails, toScreening } from "./backendBridge";
+import { BACKEND_DEMO_PATIENT_REF, findDetailByPatientRef, getAllBackendPatients, getAllCaseDetails, getCaseDetails, toScreening } from "./backendBridge";
 export const screeningService = {
   async list(role?: Role, patientId?: string): Promise<Screening[]> {
     if (!isDemoMode) {
@@ -24,9 +24,11 @@ export const screeningService = {
       if (payload.report) throw new Error("File uploads are not enabled in the synthetic-data backend. Enter the screening result as text.");
       const detail = await findDetailByPatientRef(payload.patientId || "") ??
         (await getAllCaseDetails()).find(item => item.patient.name === payload.patient);
-      if (!detail) throw new Error("Register or select an existing demo patient before screening.");
+      const targetPatient = detail?.patient ?? (await getAllBackendPatients()).find(item =>
+        item.patientReference === payload.patientId || item.name === payload.patient);
+      if (!targetPatient) throw new Error("Register or select an existing demo patient before screening.");
       const result = (await api.post<{ careCase: { id: string } }>("/screenings", {
-        patientId: detail.patient.id, screeningType: payload.type, resultValue: payload.result,
+        patientId: targetPatient.id, screeningType: payload.type, resultValue: payload.result,
       })).data;
       const latest = await getCaseDetails(result.careCase.id);
       const screening = toScreening(latest);

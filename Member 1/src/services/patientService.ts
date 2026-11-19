@@ -2,14 +2,24 @@ import { api, isDemoMode } from "./api";
 import { DEMO_PATIENT_ID, patients } from "../mocks/data";
 import { recordDemoCaseEvent } from "../mocks/caseEvents";
 import type { CaseStatus, Patient, Role } from "../types";
-import { BACKEND_DEMO_PATIENT_REF, backendStatus, findDetailByPatientRef, getAllCaseDetails, getCaseDetails, toPatient } from "./backendBridge";
+import { BACKEND_DEMO_PATIENT_REF, backendStatus, findDetailByPatientRef, getAllBackendPatients, getAllCaseDetails, getCaseDetails, getBackendPatient, toPatient, toUnscreenedPatient } from "./backendBridge";
 
 const delay = () => new Promise((resolve) => window.setTimeout(resolve, 180));
 export const patientService = {
   async list(role?: Role, patientId?: string): Promise<Patient[]> {
     if (!isDemoMode) {
       const cases = await getAllCaseDetails();
-      return cases.filter(d => role !== "patient" || d.patient.patientReference === (patientId || BACKEND_DEMO_PATIENT_REF)).map(toPatient);
+      const seen = new Set<string>();
+      const latestCases = cases.filter(detail => {
+        if (seen.has(detail.patient.patientReference)) return false;
+        seen.add(detail.patient.patientReference);
+        return true;
+      });
+      const visibleCases = latestCases.filter(d => role !== "patient" || d.patient.patientReference === (patientId || BACKEND_DEMO_PATIENT_REF));
+      if (role === "patient") return visibleCases.map(toPatient);
+      const all = await getAllBackendPatients();
+      const withCases = new Set(cases.map(d => d.patient.patientReference));
+      return [...visibleCases.map(toPatient), ...all.filter(p => !withCases.has(p.patientReference)).map(toUnscreenedPatient)];
     }
     await delay();
     if (role === "patient") return patientId === DEMO_PATIENT_ID ? patients.filter((patient) => patient.id === patientId) : [];
@@ -18,7 +28,7 @@ export const patientService = {
   async get(id: string, role?: Role, patientId?: string): Promise<Patient | undefined> {
     if (!isDemoMode) {
       const detail = await findDetailByPatientRef(id);
-      return detail ? toPatient(detail) : undefined;
+      return detail ? toPatient(detail) : toUnscreenedPatient(await getBackendPatient(id));
     }
     await delay();
     const patient = patients.find((item) => item.id === id);
@@ -37,7 +47,10 @@ export const patientService = {
     return userId === "U-004" ? patients.find((patient) => patient.id === "CL-2048") : undefined;
   },
   async create(payload: Pick<Patient, "name" | "phone" | "email" | "age" | "gender">): Promise<Patient> {
-    if (!isDemoMode) throw new Error("New patient registration is available in standalone demo mode. Connected care records must start with a registered synthetic patient.");
+    if (!isDemoMode) {
+      const response = await api.post<import("./backendBridge").BackendPatient>("/patients", payload);
+      return toUnscreenedPatient(response.data);
+    }
     await delay();
     const initials = payload.name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase();
     const created: Patient = { ...payload, id: `CL-${Date.now().toString().slice(-4)}`, initials, location: "San Francisco, CA", screening: "Not yet screened", result: "Awaiting screening", status: "In progress", priority: "Routine", doctor: "Unassigned", coordinator: "Jordan Lee", lastActivity: "Just now", nextAction: "Schedule screening" };

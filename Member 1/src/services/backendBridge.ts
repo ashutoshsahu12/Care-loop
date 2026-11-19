@@ -74,6 +74,26 @@ export function dateLabel(iso: string | undefined): string {
 export function initials(name: string): string {
   return name.split(/\s+/).filter(Boolean).map(part => part[0]).join("").slice(0, 2).toUpperCase();
 }
+export function toUnscreenedPatient(patient: BackendPatient): Patient {
+  const parsed = patient.dateOfBirth ? new Date(patient.dateOfBirth) : null;
+  const age = parsed && !Number.isNaN(parsed.getTime()) ? Math.max(0, new Date().getFullYear() - parsed.getFullYear()) : 0;
+  return {
+    id: patient.patientReference, name: patient.name, initials: initials(patient.name),
+    age, gender: patient.gender ?? "Not specified", phone: patient.phone ?? "",
+    email: patient.email ?? "", location: patient.address ?? "Care network",
+    screening: "Not yet screened", result: "Awaiting screening",
+    status: "In progress", priority: "Routine", doctor: "Unassigned",
+    coordinator: "Unassigned", lastActivity: "New registration",
+    nextAction: "Record screening",
+  };
+}
+export async function getAllBackendPatients(): Promise<BackendPatient[]> {
+  return (await api.get<BackendPatient[]>("/patients")).data;
+}
+export async function getBackendPatient(idOrReference: string): Promise<BackendPatient> {
+  return (await api.get<BackendPatient>(`/patients/${encodeURIComponent(idOrReference)}`)).data;
+}
+
 export function toPatient(detail: BackendCaseDetail): Patient {
   const { patient, caseRecord: c, screeningResult: s } = detail;
   const dob = patient.dateOfBirth ? new Date(patient.dateOfBirth) : null;
