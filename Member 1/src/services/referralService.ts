@@ -2,7 +2,7 @@ import { api, isDemoMode } from "./api";
 import { DEMO_PATIENT_ID, patients } from "../mocks/data";
 import { recordDemoCaseEvent } from "../mocks/caseEvents";
 import type { Referral, Role } from "../types";
-import { BACKEND_DEMO_PATIENT_REF, findDetailByPatientRef, getAllCaseDetails, getCaseDetails, toReferral, visibleCaseDetails } from "./backendBridge";
+import { findDetailByPatientRef, getAllCaseDetails, getCaseDetails, toReferral, visibleCaseDetails } from "./backendBridge";
 export type { Referral } from "../types";
 export const demoReferrals: Referral[] = [
   { id: "RF-2014", patient: "Amara Okafor", initials: "AO", specialty: "Gynecology", referredTo: "Bayview Women's Health", date: "Nov 15, 2026", status: "Accepted" },
