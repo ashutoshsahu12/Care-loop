@@ -2,7 +2,7 @@ import { api, isDemoMode } from "./api";
 import { DEMO_PATIENT_ID, patients } from "../mocks/data";
 import { recordDemoCaseEvent } from "../mocks/caseEvents";
 import type { CaseStatus, Patient, Role } from "../types";
-import { BACKEND_DEMO_PATIENT_REF, backendStatus, findDetailByPatientRef, getAllBackendPatients, getAllCaseDetails, getCaseDetails, getBackendPatient, toPatient, toUnscreenedPatient, latestVisibleCases } from "./backendBridge";
+import { BACKEND_DEMO_PATIENT_REF, backendStatus, findDetailByPatientRef, getAllBackendPatients, getAllCaseDetails, getCaseDetails, getBackendPatient, toPatient, toUnscreenedPatient, latestVisibleCases, unscreenedRegistrations } from "./backendBridge";
 
 const delay = () => new Promise((resolve) => window.setTimeout(resolve, 180));
 export const patientService = {
@@ -28,12 +28,7 @@ export const patientService = {
     const [registered, cases] = await Promise.all([
       getAllBackendPatients(), getAllCaseDetails(),
     ]);
-    const withCases = new Set(cases.map(detail => detail.patient.patientReference));
-    return [
-      ...assigned,
-      ...registered.filter(patient => !withCases.has(patient.patientReference))
-        .map(toUnscreenedPatient),
-    ];
+    return [...assigned, ...unscreenedRegistrations(registered, cases)];
   },
   async get(id: string, role?: Role, patientId?: string): Promise<Patient | undefined> {
     if (!isDemoMode) {
