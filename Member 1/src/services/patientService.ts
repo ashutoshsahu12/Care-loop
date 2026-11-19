@@ -2,7 +2,7 @@ import { api, isDemoMode } from "./api";
 import { DEMO_PATIENT_ID, patients } from "../mocks/data";
 import { recordDemoCaseEvent } from "../mocks/caseEvents";
 import type { CaseStatus, Patient, Role } from "../types";
-import { BACKEND_DEMO_PATIENT_REF, backendStatus, findDetailByPatientRef, getAllBackendPatients, getAllCaseDetails, getCaseDetails, getBackendPatient, toPatient, toUnscreenedPatient, visibleCaseDetails, latestVisibleCases } from "./backendBridge";
+import { BACKEND_DEMO_PATIENT_REF, backendStatus, findDetailByPatientRef, getAllBackendPatients, getAllCaseDetails, getCaseDetails, getBackendPatient, toPatient, toUnscreenedPatient, latestVisibleCases } from "./backendBridge";
 
 const delay = () => new Promise((resolve) => window.setTimeout(resolve, 180));
 export const patientService = {
@@ -25,11 +25,13 @@ export const patientService = {
   async listForScreening(role?: Role): Promise<Patient[]> {
     const assigned = await patientService.list(role);
     if (isDemoMode || (role !== "doctor" && role !== "worker")) return assigned;
-    const registered = await getAllBackendPatients();
-    const known = new Set(assigned.map(patient => patient.id));
+    const [registered, cases] = await Promise.all([
+      getAllBackendPatients(), getAllCaseDetails(),
+    ]);
+    const withCases = new Set(cases.map(detail => detail.patient.patientReference));
     return [
       ...assigned,
-      ...registered.filter(patient => !known.has(patient.patientReference))
+      ...registered.filter(patient => !withCases.has(patient.patientReference))
         .map(toUnscreenedPatient),
     ];
   },
