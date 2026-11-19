@@ -225,11 +225,8 @@ export class AppRouter {
         const caseId = caseMatch[1];
         await this.ensurePatientCaseAccess(user, caseId);
         const details = await this.caseService.getCaseDetails(caseId);
-        await this.ensurePatientCaseAccess(user, caseId);
         const referrals = await this.referralService.getReferralsByCase(caseId);
-        await this.ensurePatientCaseAccess(user, caseId);
         const appointments = await this.appointmentService.getAppointmentsByCase(caseId);
-        await this.ensurePatientCaseAccess(user, caseId);
         const tasks = await this.taskService.getTasksByCase(caseId);
         const timeline = await this.timelineService.getCaseTimeline(caseId);
         return jsonResponse({
