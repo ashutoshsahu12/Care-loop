@@ -23,8 +23,15 @@ export const followupService = {
       const detail = await findDetailByPatientRef(payload.patientId || "") ??
         (await getAllCaseDetails()).find(d => d.patient.name === payload.patient);
       if (!detail) throw new Error("Select an existing case before creating a follow-up.");
+      const workers: Record<string, string> = {
+        "A. Sharma": "usr-cw-1", "R. Kumar": "usr-cw-2",
+        "S. Iyer": "usr-cw-3", "M. Das": "usr-cw-4",
+        "Jordan Lee": "usr-cw-1",
+      };
+      const assignedToId = workers[payload.owner];
+      if (!assignedToId) throw new Error("Choose an assigned care worker from the connected demo team.");
       const created = (await api.post<{ id: string }>(`/cases/${encodeURIComponent(detail.caseRecord.id)}/tasks`, {
-        assignedToId: "usr-cw-1", title: payload.reason, dueDate: payload.due,
+        assignedToId, title: payload.reason, dueDate: payload.due,
       })).data;
       const updated = await getCaseDetails(detail.caseRecord.id);
       const task = updated.tasks.find(t => t.id === created.id);
