@@ -1,6 +1,7 @@
 export type Role = "admin" | "doctor" | "worker" | "patient";
 export type CaseStatus =
   | "In progress"
+  | "In care"
   | "Awaiting patient"
   | "Appointment scheduled"
   | "Referred"
