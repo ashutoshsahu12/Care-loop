@@ -2,23 +2,14 @@ import { api, isDemoMode } from "./api";
 import { DEMO_PATIENT_ID, patients } from "../mocks/data";
 import { recordDemoCaseEvent } from "../mocks/caseEvents";
 import type { CaseStatus, Patient, Role } from "../types";
-import { BACKEND_DEMO_PATIENT_REF, backendStatus, findDetailByPatientRef, getAllBackendPatients, getAllCaseDetails, getCaseDetails, getBackendPatient, toPatient, toUnscreenedPatient, visibleCaseDetails } from "./backendBridge";
+import { BACKEND_DEMO_PATIENT_REF, backendStatus, findDetailByPatientRef, getAllBackendPatients, getAllCaseDetails, getCaseDetails, getBackendPatient, toPatient, toUnscreenedPatient, visibleCaseDetails, latestVisibleCases } from "./backendBridge";
 
 const delay = () => new Promise((resolve) => window.setTimeout(resolve, 180));
 export const patientService = {
   async list(role?: Role, patientId?: string): Promise<Patient[]> {
     if (!isDemoMode) {
       const cases = await getAllCaseDetails();
-      const latest = new Map<string, (typeof cases)[number]>();
-      for (const detail of cases) {
-        const patientRef = detail.patient.patientReference;
-        const existing = latest.get(patientRef);
-        if (!existing || (detail.caseRecord.createdAt ?? detail.caseRecord.lastActivityAt) >
-          (existing.caseRecord.createdAt ?? existing.caseRecord.lastActivityAt)) {
-          latest.set(patientRef, detail);
-        }
-      }
-      const visibleCases = visibleCaseDetails([...latest.values()], role, patientId);
+      const visibleCases = latestVisibleCases(cases, role, patientId);
       if (role === "patient") return visibleCases.map(toPatient);
       // Unassigned registrations are visible to admin only, not arbitrary care-team users.
       if (role === "doctor" || role === "worker") return visibleCases.map(toPatient);
@@ -30,14 +21,27 @@ export const patientService = {
     if (role === "patient") return patientId === DEMO_PATIENT_ID ? patients.filter((patient) => patient.id === patientId) : [];
     return [...patients].filter((patient) => role === "doctor" ? patient.doctor === "Dr. Maya Chen" : role === "worker" ? patient.coordinator === "Jordan Lee" : true);
   },
+  /** Intake screen may select new registered patients before anyone has been assigned a case. */
+  async listForScreening(role?: Role): Promise<Patient[]> {
+    const assigned = await patientService.list(role);
+    if (isDemoMode || (role !== "doctor" && role !== "worker")) return assigned;
+    const registered = await getAllBackendPatients();
+    const known = new Set(assigned.map(patient => patient.id));
+    return [
+      ...assigned,
+      ...registered.filter(patient => !known.has(patient.patientReference))
+        .map(toUnscreenedPatient),
+    ];
+  },
   async get(id: string, role?: Role, patientId?: string): Promise<Patient | undefined> {
     if (!isDemoMode) {
-      const detail = await findDetailByPatientRef(id);
-      if (detail) {
-        if (visibleCaseDetails([detail], role, patientId).length === 0) return undefined;
-        return toPatient(detail);
-      }
-      // A patient with no assigned case is in the registration queue for admins only.
+      const cases = await getAllCaseDetails();
+      const detail = latestVisibleCases(cases, role, patientId).find(item =>
+        item.patient.patientReference === id || item.patient.id === id
+      );
+      if (detail) return toPatient(detail);
+      // Do not reveal a patient's newer unassigned case through an older staff assignment.
+      if (cases.some(item => item.patient.patientReference === id || item.patient.id === id)) return undefined;
       if (role === "doctor" || role === "worker" || role === "patient") return undefined;
       return toUnscreenedPatient(await getBackendPatient(id));
     }
