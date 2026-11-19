@@ -2,10 +2,10 @@
  *  Kept separate so existing standalone frontend demo data remains unchanged.
  */
 import { api } from "./api";
-import type { Appointment, CaseStatus, CaseTimelineEvent, FollowUp, Patient, PatientCase, Referral, Screening } from "../types";
+import type { Appointment, CaseStatus, CaseTimelineEvent, FollowUp, Patient, PatientCase, Referral, Role, Screening } from "../types";
 
 export interface BackendCase {
-  id: string; patientId: string; status: string; priority: string;
+  id: string; patientId: string; status: string; priority: string; ownerId?: string | null;
   assignedCareWorkerName?: string | null; nextAction: string; dueAt: string;
   lastActivityAt: string; patientReference?: string; patientName?: string;
 }
@@ -15,10 +15,11 @@ export interface BackendPatient {
 }
 export interface BackendScreening {
   id: string; screeningType: string; resultValue: string; createdAt: string;
-  status: string; clinicianNotes?: string | null;
+  status: string; clinicianNotes?: string | null; submittedById?: string | null; score?: number | null;
 }
 export interface BackendReferral {
   id: string; specialty: string; targetFacility: string; createdAt: string; status: string;
+  referringProviderId?: string; handoffClinicianId?: string | null;
 }
 export interface BackendAppointment {
   id: string; scheduledTime: string; providerName: string; facility: string; status: string;
@@ -165,6 +166,30 @@ export async function getAllCaseDetails(): Promise<BackendCaseDetail[]> {
 export async function getPatientSummary(patientRef = BACKEND_DEMO_PATIENT_REF): Promise<BackendPatientSummary> {
   return (await api.get<BackendPatientSummary>("/patient/summary", { params: { patientId: patientRef } })).data;
 }
+/** Filter rendered care-team lists to the selected seeded demo identity.
+ * Server-side authorization remains a separate prerequisite for real patient data.
+ */
+export function visibleCaseDetails(
+  details: BackendCaseDetail[], role?: Role, patientRef?: string
+): BackendCaseDetail[] {
+  if (role === "patient") {
+    return details.filter(detail => detail.patient.patientReference === (patientRef || BACKEND_DEMO_PATIENT_REF));
+  }
+  if (role === "worker") {
+    return details.filter(detail => detail.caseRecord.ownerId === "usr-cw-1");
+  }
+  if (role === "doctor") {
+    return details.filter(detail =>
+      detail.screeningResult?.submittedById === "usr-clin-1" ||
+      detail.referrals.some(referral =>
+        referral.referringProviderId === "usr-clin-1" ||
+        referral.handoffClinicianId === "usr-clin-1") ||
+      detail.timeline.some(event => event.actorId === "usr-clin-1")
+    );
+  }
+  return details;
+}
+
 export async function findDetailByPatientRef(patientRef: string): Promise<BackendCaseDetail | undefined> {
   const all = await getAllCaseDetails();
   return all.find(item => item.patient.patientReference === patientRef || item.patient.id === patientRef);
