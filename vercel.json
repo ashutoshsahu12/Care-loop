@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+<<<<<<< HEAD
   "installCommand": "npm install",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
@@ -7,6 +8,29 @@
     {
       "source": "/(.*)",
       "destination": "/index.html"
+=======
+  "services": {
+    "member1": {
+      "root": "Member 1",
+      "framework": "vite",
+      "installCommand": "npm ci",
+      "buildCommand": "npm run build",
+      "outputDirectory": "dist",
+      "rewrites": [
+        {
+          "source": "/((?!assets/|api/).*)",
+          "destination": "/index.html"
+        }
+      ]
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "member1"
+      }
+>>>>>>> 506666403a4efeaf8d21dea157dd4e004e25dd6f
     }
   ]
 }
