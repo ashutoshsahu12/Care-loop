@@ -1,10 +1,26 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": null,
-  "installCommand": "npm ci --prefix 'Member 1'",
-  "buildCommand": "VITE_CARELOOP_BROWSER_DEMO=true npm run build --prefix 'Member 1'",
-  "outputDirectory": "Member 1/dist",
+  "services": {
+    "member1": {
+      "root": "Member 1",
+      "framework": "vite",
+      "installCommand": "npm ci",
+      "buildCommand": "npm run build",
+      "outputDirectory": "dist",
+      "rewrites": [
+        {
+          "source": "/((?!assets/|api/).*)",
+          "destination": "/index.html"
+        }
+      ]
+    }
+  },
   "rewrites": [
-    { "source": "/((?!assets/|api/).*)", "destination": "/index.html" }
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "member1"
+      }
+    }
   ]
 }

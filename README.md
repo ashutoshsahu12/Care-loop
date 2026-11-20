@@ -4,17 +4,20 @@ A comprehensive healthcare coordination platform designed to ensure that no pati
 
 ---
 
-## Care walkthrough and Vercel
+## Vercel deployment
 
-Start at `/walkthrough` for the four-role walkthrough, synthetic cohort metrics, and a [verification and pilot guide](docs/walkthrough.md). The Vercel build runs the existing CARELOOP workflow in the browser. Use the role links in one tab to work on the same cases, and use the reset control to restore the fixture.
+The root `vercel.json` deploys Member 1 as the `member1` Vercel service and sends all public paths to it. Member 3 is a feature module embedded in Member 1, not a standalone deployable service. Member 2 remains a Cloudflare Worker backed by Cloudflare D1; it is not deployed as a Vercel service.
 
-Import this repository into Vercel with the **repository root** as the Root Directory. The root `vercel.json` specifies installation, the build, output, and deep-link handling. The browser demo uses Node.js 22 at build time and requires no environment variables or hosted database.
+Set `VITE_API_BASE_URL` in the Vercel project's build environment to the deployed Member 2 API base URL, including `/api` (for example, `https://careloop-api.example.workers.dev/api`). The frontend calls this public API directly from the browser; it does not use a Vercel service binding. `VITE_API_BASE_URL` is bundled into browser code, so it must not contain secrets. Configure the Worker and its D1 database separately.
 
-To reproduce the deployment build locally from the repository root:
+For the standalone browser walkthrough, set `VITE_CARELOOP_BROWSER_DEMO=true` and build Member 1 as below. The Vercel service build does not enable browser-demo mode; without `VITE_API_BASE_URL`, the connected backend is not configured.
 
-```bash
+To reproduce a connected deployment build locally from the repository root, set `VITE_API_BASE_URL` to a running Member 2 API first:
+
+```powershell
 npm ci --prefix 'Member 1'
-VITE_CARELOOP_BROWSER_DEMO=true npm run build --prefix 'Member 1'
+$env:VITE_API_BASE_URL = 'http://localhost:8787/api'
+npm run build --prefix 'Member 1'
 npm run preview --prefix 'Member 1'
 ```
 
